@@ -1,0 +1,131 @@
+7767517
+129 145
+Input            input                    0 1 input
+Convolution      /body/stage1/stage1.0/stage1.0.0/Conv 1 1 input /body/stage1/stage1.0/stage1.0.0/Conv_output_0 0=8 1=3 11=3 2=1 12=1 3=2 13=2 4=1 14=1 15=1 16=1 5=1 6=216
+ReLU             /body/stage1/stage1.0/stage1.0.2/LeakyRelu 1 1 /body/stage1/stage1.0/stage1.0.0/Conv_output_0 /body/stage1/stage1.0/stage1.0.2/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage1/stage1.1/stage1.1.0/Conv 1 1 /body/stage1/stage1.0/stage1.0.2/LeakyRelu_output_0 /body/stage1/stage1.1/stage1.1.0/Conv_output_0 0=8 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=72 7=8
+ReLU             /body/stage1/stage1.1/stage1.1.2/LeakyRelu 1 1 /body/stage1/stage1.1/stage1.1.0/Conv_output_0 /body/stage1/stage1.1/stage1.1.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage1/stage1.1/stage1.1.3/Conv 1 1 /body/stage1/stage1.1/stage1.1.2/LeakyRelu_output_0 /body/stage1/stage1.1/stage1.1.3/Conv_output_0 0=16 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=128
+ReLU             /body/stage1/stage1.1/stage1.1.5/LeakyRelu 1 1 /body/stage1/stage1.1/stage1.1.3/Conv_output_0 /body/stage1/stage1.1/stage1.1.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage1/stage1.2/stage1.2.0/Conv 1 1 /body/stage1/stage1.1/stage1.1.5/LeakyRelu_output_0 /body/stage1/stage1.2/stage1.2.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=2 13=2 4=1 14=1 15=1 16=1 5=1 6=144 7=16
+ReLU             /body/stage1/stage1.2/stage1.2.2/LeakyRelu 1 1 /body/stage1/stage1.2/stage1.2.0/Conv_output_0 /body/stage1/stage1.2/stage1.2.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage1/stage1.2/stage1.2.3/Conv 1 1 /body/stage1/stage1.2/stage1.2.2/LeakyRelu_output_0 /body/stage1/stage1.2/stage1.2.3/Conv_output_0 0=32 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=512
+ReLU             /body/stage1/stage1.2/stage1.2.5/LeakyRelu 1 1 /body/stage1/stage1.2/stage1.2.3/Conv_output_0 /body/stage1/stage1.2/stage1.2.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage1/stage1.3/stage1.3.0/Conv 1 1 /body/stage1/stage1.2/stage1.2.5/LeakyRelu_output_0 /body/stage1/stage1.3/stage1.3.0/Conv_output_0 0=32 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=288 7=32
+ReLU             /body/stage1/stage1.3/stage1.3.2/LeakyRelu 1 1 /body/stage1/stage1.3/stage1.3.0/Conv_output_0 /body/stage1/stage1.3/stage1.3.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage1/stage1.3/stage1.3.3/Conv 1 1 /body/stage1/stage1.3/stage1.3.2/LeakyRelu_output_0 /body/stage1/stage1.3/stage1.3.3/Conv_output_0 0=32 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=1024
+ReLU             /body/stage1/stage1.3/stage1.3.5/LeakyRelu 1 1 /body/stage1/stage1.3/stage1.3.3/Conv_output_0 /body/stage1/stage1.3/stage1.3.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage1/stage1.4/stage1.4.0/Conv 1 1 /body/stage1/stage1.3/stage1.3.5/LeakyRelu_output_0 /body/stage1/stage1.4/stage1.4.0/Conv_output_0 0=32 1=3 11=3 2=1 12=1 3=2 13=2 4=1 14=1 15=1 16=1 5=1 6=288 7=32
+ReLU             /body/stage1/stage1.4/stage1.4.2/LeakyRelu 1 1 /body/stage1/stage1.4/stage1.4.0/Conv_output_0 /body/stage1/stage1.4/stage1.4.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage1/stage1.4/stage1.4.3/Conv 1 1 /body/stage1/stage1.4/stage1.4.2/LeakyRelu_output_0 /body/stage1/stage1.4/stage1.4.3/Conv_output_0 0=64 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=2048
+ReLU             /body/stage1/stage1.4/stage1.4.5/LeakyRelu 1 1 /body/stage1/stage1.4/stage1.4.3/Conv_output_0 /body/stage1/stage1.4/stage1.4.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage1/stage1.5/stage1.5.0/Conv 1 1 /body/stage1/stage1.4/stage1.4.5/LeakyRelu_output_0 /body/stage1/stage1.5/stage1.5.0/Conv_output_0 0=64 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=576 7=64
+ReLU             /body/stage1/stage1.5/stage1.5.2/LeakyRelu 1 1 /body/stage1/stage1.5/stage1.5.0/Conv_output_0 /body/stage1/stage1.5/stage1.5.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage1/stage1.5/stage1.5.3/Conv 1 1 /body/stage1/stage1.5/stage1.5.2/LeakyRelu_output_0 /body/stage1/stage1.5/stage1.5.3/Conv_output_0 0=64 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=4096
+ReLU             /body/stage1/stage1.5/stage1.5.5/LeakyRelu 1 1 /body/stage1/stage1.5/stage1.5.3/Conv_output_0 /body/stage1/stage1.5/stage1.5.5/LeakyRelu_output_0 0=1.000000e-01
+Split            splitncnn_0              1 2 /body/stage1/stage1.5/stage1.5.5/LeakyRelu_output_0 /body/stage1/stage1.5/stage1.5.5/LeakyRelu_output_0_splitncnn_0 /body/stage1/stage1.5/stage1.5.5/LeakyRelu_output_0_splitncnn_1
+ConvolutionDepthWise /body/stage2/stage2.0/stage2.0.0/Conv 1 1 /body/stage1/stage1.5/stage1.5.5/LeakyRelu_output_0_splitncnn_1 /body/stage2/stage2.0/stage2.0.0/Conv_output_0 0=64 1=3 11=3 2=1 12=1 3=2 13=2 4=1 14=1 15=1 16=1 5=1 6=576 7=64
+ReLU             /body/stage2/stage2.0/stage2.0.2/LeakyRelu 1 1 /body/stage2/stage2.0/stage2.0.0/Conv_output_0 /body/stage2/stage2.0/stage2.0.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage2/stage2.0/stage2.0.3/Conv 1 1 /body/stage2/stage2.0/stage2.0.2/LeakyRelu_output_0 /body/stage2/stage2.0/stage2.0.3/Conv_output_0 0=128 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=8192
+ReLU             /body/stage2/stage2.0/stage2.0.5/LeakyRelu 1 1 /body/stage2/stage2.0/stage2.0.3/Conv_output_0 /body/stage2/stage2.0/stage2.0.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage2/stage2.1/stage2.1.0/Conv 1 1 /body/stage2/stage2.0/stage2.0.5/LeakyRelu_output_0 /body/stage2/stage2.1/stage2.1.0/Conv_output_0 0=128 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=1152 7=128
+ReLU             /body/stage2/stage2.1/stage2.1.2/LeakyRelu 1 1 /body/stage2/stage2.1/stage2.1.0/Conv_output_0 /body/stage2/stage2.1/stage2.1.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage2/stage2.1/stage2.1.3/Conv 1 1 /body/stage2/stage2.1/stage2.1.2/LeakyRelu_output_0 /body/stage2/stage2.1/stage2.1.3/Conv_output_0 0=128 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=16384
+ReLU             /body/stage2/stage2.1/stage2.1.5/LeakyRelu 1 1 /body/stage2/stage2.1/stage2.1.3/Conv_output_0 /body/stage2/stage2.1/stage2.1.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage2/stage2.2/stage2.2.0/Conv 1 1 /body/stage2/stage2.1/stage2.1.5/LeakyRelu_output_0 /body/stage2/stage2.2/stage2.2.0/Conv_output_0 0=128 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=1152 7=128
+ReLU             /body/stage2/stage2.2/stage2.2.2/LeakyRelu 1 1 /body/stage2/stage2.2/stage2.2.0/Conv_output_0 /body/stage2/stage2.2/stage2.2.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage2/stage2.2/stage2.2.3/Conv 1 1 /body/stage2/stage2.2/stage2.2.2/LeakyRelu_output_0 /body/stage2/stage2.2/stage2.2.3/Conv_output_0 0=128 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=16384
+ReLU             /body/stage2/stage2.2/stage2.2.5/LeakyRelu 1 1 /body/stage2/stage2.2/stage2.2.3/Conv_output_0 /body/stage2/stage2.2/stage2.2.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage2/stage2.3/stage2.3.0/Conv 1 1 /body/stage2/stage2.2/stage2.2.5/LeakyRelu_output_0 /body/stage2/stage2.3/stage2.3.0/Conv_output_0 0=128 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=1152 7=128
+ReLU             /body/stage2/stage2.3/stage2.3.2/LeakyRelu 1 1 /body/stage2/stage2.3/stage2.3.0/Conv_output_0 /body/stage2/stage2.3/stage2.3.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage2/stage2.3/stage2.3.3/Conv 1 1 /body/stage2/stage2.3/stage2.3.2/LeakyRelu_output_0 /body/stage2/stage2.3/stage2.3.3/Conv_output_0 0=128 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=16384
+ReLU             /body/stage2/stage2.3/stage2.3.5/LeakyRelu 1 1 /body/stage2/stage2.3/stage2.3.3/Conv_output_0 /body/stage2/stage2.3/stage2.3.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage2/stage2.4/stage2.4.0/Conv 1 1 /body/stage2/stage2.3/stage2.3.5/LeakyRelu_output_0 /body/stage2/stage2.4/stage2.4.0/Conv_output_0 0=128 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=1152 7=128
+ReLU             /body/stage2/stage2.4/stage2.4.2/LeakyRelu 1 1 /body/stage2/stage2.4/stage2.4.0/Conv_output_0 /body/stage2/stage2.4/stage2.4.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage2/stage2.4/stage2.4.3/Conv 1 1 /body/stage2/stage2.4/stage2.4.2/LeakyRelu_output_0 /body/stage2/stage2.4/stage2.4.3/Conv_output_0 0=128 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=16384
+ReLU             /body/stage2/stage2.4/stage2.4.5/LeakyRelu 1 1 /body/stage2/stage2.4/stage2.4.3/Conv_output_0 /body/stage2/stage2.4/stage2.4.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage2/stage2.5/stage2.5.0/Conv 1 1 /body/stage2/stage2.4/stage2.4.5/LeakyRelu_output_0 /body/stage2/stage2.5/stage2.5.0/Conv_output_0 0=128 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=1152 7=128
+ReLU             /body/stage2/stage2.5/stage2.5.2/LeakyRelu 1 1 /body/stage2/stage2.5/stage2.5.0/Conv_output_0 /body/stage2/stage2.5/stage2.5.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage2/stage2.5/stage2.5.3/Conv 1 1 /body/stage2/stage2.5/stage2.5.2/LeakyRelu_output_0 /body/stage2/stage2.5/stage2.5.3/Conv_output_0 0=128 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=16384
+ReLU             /body/stage2/stage2.5/stage2.5.5/LeakyRelu 1 1 /body/stage2/stage2.5/stage2.5.3/Conv_output_0 /body/stage2/stage2.5/stage2.5.5/LeakyRelu_output_0 0=1.000000e-01
+Split            splitncnn_1              1 2 /body/stage2/stage2.5/stage2.5.5/LeakyRelu_output_0 /body/stage2/stage2.5/stage2.5.5/LeakyRelu_output_0_splitncnn_0 /body/stage2/stage2.5/stage2.5.5/LeakyRelu_output_0_splitncnn_1
+ConvolutionDepthWise /body/stage3/stage3.0/stage3.0.0/Conv 1 1 /body/stage2/stage2.5/stage2.5.5/LeakyRelu_output_0_splitncnn_1 /body/stage3/stage3.0/stage3.0.0/Conv_output_0 0=128 1=3 11=3 2=1 12=1 3=2 13=2 4=1 14=1 15=1 16=1 5=1 6=1152 7=128
+ReLU             /body/stage3/stage3.0/stage3.0.2/LeakyRelu 1 1 /body/stage3/stage3.0/stage3.0.0/Conv_output_0 /body/stage3/stage3.0/stage3.0.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage3/stage3.0/stage3.0.3/Conv 1 1 /body/stage3/stage3.0/stage3.0.2/LeakyRelu_output_0 /body/stage3/stage3.0/stage3.0.3/Conv_output_0 0=256 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=32768
+ReLU             /body/stage3/stage3.0/stage3.0.5/LeakyRelu 1 1 /body/stage3/stage3.0/stage3.0.3/Conv_output_0 /body/stage3/stage3.0/stage3.0.5/LeakyRelu_output_0 0=1.000000e-01
+ConvolutionDepthWise /body/stage3/stage3.1/stage3.1.0/Conv 1 1 /body/stage3/stage3.0/stage3.0.5/LeakyRelu_output_0 /body/stage3/stage3.1/stage3.1.0/Conv_output_0 0=256 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304 7=256
+ReLU             /body/stage3/stage3.1/stage3.1.2/LeakyRelu 1 1 /body/stage3/stage3.1/stage3.1.0/Conv_output_0 /body/stage3/stage3.1/stage3.1.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /body/stage3/stage3.1/stage3.1.3/Conv 1 1 /body/stage3/stage3.1/stage3.1.2/LeakyRelu_output_0 /body/stage3/stage3.1/stage3.1.3/Conv_output_0 0=256 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=65536
+ReLU             /body/stage3/stage3.1/stage3.1.5/LeakyRelu 1 1 /body/stage3/stage3.1/stage3.1.3/Conv_output_0 /body/stage3/stage3.1/stage3.1.5/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /fpn/output1/output1.0/Conv 1 1 /body/stage1/stage1.5/stage1.5.5/LeakyRelu_output_0_splitncnn_0 /fpn/output1/output1.0/Conv_output_0 0=64 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=4096
+ReLU             /fpn/output1/output1.2/LeakyRelu 1 1 /fpn/output1/output1.0/Conv_output_0 /fpn/output1/output1.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /fpn/output2/output2.0/Conv 1 1 /body/stage2/stage2.5/stage2.5.5/LeakyRelu_output_0_splitncnn_0 /fpn/output2/output2.0/Conv_output_0 0=64 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=8192
+ReLU             /fpn/output2/output2.2/LeakyRelu 1 1 /fpn/output2/output2.0/Conv_output_0 /fpn/output2/output2.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /fpn/output3/output3.0/Conv 1 1 /body/stage3/stage3.1/stage3.1.5/LeakyRelu_output_0 /fpn/output3/output3.0/Conv_output_0 0=64 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=16384
+ReLU             /fpn/output3/output3.2/LeakyRelu 1 1 /fpn/output3/output3.0/Conv_output_0 /fpn/output3/output3.2/LeakyRelu_output_0 0=1.000000e-01
+Split            splitncnn_2              1 3 /fpn/output3/output3.2/LeakyRelu_output_0 /fpn/output3/output3.2/LeakyRelu_output_0_splitncnn_0 /fpn/output3/output3.2/LeakyRelu_output_0_splitncnn_1 /fpn/output3/output3.2/LeakyRelu_output_0_splitncnn_2
+Interp           /fpn/Resize              1 1 /fpn/output3/output3.2/LeakyRelu_output_0_splitncnn_2 /fpn/Resize_output_0 0=1 1=1.000000e+00 2=1.000000e+00 3=20 4=20 6=0
+BinaryOp         /fpn/Add                 2 1 /fpn/output2/output2.2/LeakyRelu_output_0 /fpn/Resize_output_0 /fpn/Add_output_0 0=0
+Convolution      /fpn/merge2/merge2.0/Conv 1 1 /fpn/Add_output_0 /fpn/merge2/merge2.0/Conv_output_0 0=64 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=36864
+ReLU             /fpn/merge2/merge2.2/LeakyRelu 1 1 /fpn/merge2/merge2.0/Conv_output_0 /fpn/merge2/merge2.2/LeakyRelu_output_0 0=1.000000e-01
+Split            splitncnn_3              1 3 /fpn/merge2/merge2.2/LeakyRelu_output_0 /fpn/merge2/merge2.2/LeakyRelu_output_0_splitncnn_0 /fpn/merge2/merge2.2/LeakyRelu_output_0_splitncnn_1 /fpn/merge2/merge2.2/LeakyRelu_output_0_splitncnn_2
+Interp           /fpn/Resize_1            1 1 /fpn/merge2/merge2.2/LeakyRelu_output_0_splitncnn_2 /fpn/Resize_1_output_0 0=1 1=1.000000e+00 2=1.000000e+00 3=40 4=40 6=0
+BinaryOp         /fpn/Add_1               2 1 /fpn/output1/output1.2/LeakyRelu_output_0 /fpn/Resize_1_output_0 /fpn/Add_1_output_0 0=0
+Convolution      /fpn/merge1/merge1.0/Conv 1 1 /fpn/Add_1_output_0 /fpn/merge1/merge1.0/Conv_output_0 0=64 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=36864
+ReLU             /fpn/merge1/merge1.2/LeakyRelu 1 1 /fpn/merge1/merge1.0/Conv_output_0 /fpn/merge1/merge1.2/LeakyRelu_output_0 0=1.000000e-01
+Split            splitncnn_4              1 2 /fpn/merge1/merge1.2/LeakyRelu_output_0 /fpn/merge1/merge1.2/LeakyRelu_output_0_splitncnn_0 /fpn/merge1/merge1.2/LeakyRelu_output_0_splitncnn_1
+Convolution      /ssh1/conv3X3/conv3X3.0/Conv 1 1 /fpn/merge1/merge1.2/LeakyRelu_output_0_splitncnn_1 /ssh1/conv3X3/conv3X3.0/Conv_output_0 0=32 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=18432
+Convolution      /ssh1/conv5X5_1/conv5X5_1.0/Conv 1 1 /fpn/merge1/merge1.2/LeakyRelu_output_0_splitncnn_0 /ssh1/conv5X5_1/conv5X5_1.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=9216
+ReLU             /ssh1/conv5X5_1/conv5X5_1.2/LeakyRelu 1 1 /ssh1/conv5X5_1/conv5X5_1.0/Conv_output_0 /ssh1/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0 0=1.000000e-01
+Split            splitncnn_5              1 2 /ssh1/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0 /ssh1/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_0 /ssh1/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_1
+Convolution      /ssh1/conv5X5_2/conv5X5_2.0/Conv 1 1 /ssh1/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_1 /ssh1/conv5X5_2/conv5X5_2.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+Convolution      /ssh1/conv7X7_2/conv7X7_2.0/Conv 1 1 /ssh1/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_0 /ssh1/conv7X7_2/conv7X7_2.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+ReLU             /ssh1/conv7X7_2/conv7X7_2.2/LeakyRelu 1 1 /ssh1/conv7X7_2/conv7X7_2.0/Conv_output_0 /ssh1/conv7X7_2/conv7X7_2.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /ssh1/conv7x7_3/conv7x7_3.0/Conv 1 1 /ssh1/conv7X7_2/conv7X7_2.2/LeakyRelu_output_0 /ssh1/conv7x7_3/conv7x7_3.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+ReLU             /ssh1/Relu               1 1 /ssh1/conv3X3/conv3X3.0/Conv_output_0 /ssh1/Relu_output_0
+ReLU             /ssh1/Relu_1             1 1 /ssh1/conv5X5_2/conv5X5_2.0/Conv_output_0 /ssh1/Relu_1_output_0
+ReLU             /ssh1/Relu_2             1 1 /ssh1/conv7x7_3/conv7x7_3.0/Conv_output_0 /ssh1/Relu_2_output_0
+Concat           /ssh1/Concat             3 1 /ssh1/Relu_output_0 /ssh1/Relu_1_output_0 /ssh1/Relu_2_output_0 /ssh1/Concat_output_0 0=0
+Split            splitncnn_6              1 3 /ssh1/Concat_output_0 /ssh1/Concat_output_0_splitncnn_0 /ssh1/Concat_output_0_splitncnn_1 /ssh1/Concat_output_0_splitncnn_2
+Convolution      /ssh2/conv3X3/conv3X3.0/Conv 1 1 /fpn/merge2/merge2.2/LeakyRelu_output_0_splitncnn_1 /ssh2/conv3X3/conv3X3.0/Conv_output_0 0=32 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=18432
+Convolution      /ssh2/conv5X5_1/conv5X5_1.0/Conv 1 1 /fpn/merge2/merge2.2/LeakyRelu_output_0_splitncnn_0 /ssh2/conv5X5_1/conv5X5_1.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=9216
+ReLU             /ssh2/conv5X5_1/conv5X5_1.2/LeakyRelu 1 1 /ssh2/conv5X5_1/conv5X5_1.0/Conv_output_0 /ssh2/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0 0=1.000000e-01
+Split            splitncnn_7              1 2 /ssh2/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0 /ssh2/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_0 /ssh2/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_1
+Convolution      /ssh2/conv5X5_2/conv5X5_2.0/Conv 1 1 /ssh2/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_1 /ssh2/conv5X5_2/conv5X5_2.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+Convolution      /ssh2/conv7X7_2/conv7X7_2.0/Conv 1 1 /ssh2/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_0 /ssh2/conv7X7_2/conv7X7_2.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+ReLU             /ssh2/conv7X7_2/conv7X7_2.2/LeakyRelu 1 1 /ssh2/conv7X7_2/conv7X7_2.0/Conv_output_0 /ssh2/conv7X7_2/conv7X7_2.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /ssh2/conv7x7_3/conv7x7_3.0/Conv 1 1 /ssh2/conv7X7_2/conv7X7_2.2/LeakyRelu_output_0 /ssh2/conv7x7_3/conv7x7_3.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+ReLU             /ssh2/Relu               1 1 /ssh2/conv3X3/conv3X3.0/Conv_output_0 /ssh2/Relu_output_0
+ReLU             /ssh2/Relu_1             1 1 /ssh2/conv5X5_2/conv5X5_2.0/Conv_output_0 /ssh2/Relu_1_output_0
+ReLU             /ssh2/Relu_2             1 1 /ssh2/conv7x7_3/conv7x7_3.0/Conv_output_0 /ssh2/Relu_2_output_0
+Concat           /ssh2/Concat             3 1 /ssh2/Relu_output_0 /ssh2/Relu_1_output_0 /ssh2/Relu_2_output_0 /ssh2/Concat_output_0 0=0
+Split            splitncnn_8              1 3 /ssh2/Concat_output_0 /ssh2/Concat_output_0_splitncnn_0 /ssh2/Concat_output_0_splitncnn_1 /ssh2/Concat_output_0_splitncnn_2
+Convolution      /ssh3/conv3X3/conv3X3.0/Conv 1 1 /fpn/output3/output3.2/LeakyRelu_output_0_splitncnn_1 /ssh3/conv3X3/conv3X3.0/Conv_output_0 0=32 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=18432
+Convolution      /ssh3/conv5X5_1/conv5X5_1.0/Conv 1 1 /fpn/output3/output3.2/LeakyRelu_output_0_splitncnn_0 /ssh3/conv5X5_1/conv5X5_1.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=9216
+ReLU             /ssh3/conv5X5_1/conv5X5_1.2/LeakyRelu 1 1 /ssh3/conv5X5_1/conv5X5_1.0/Conv_output_0 /ssh3/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0 0=1.000000e-01
+Split            splitncnn_9              1 2 /ssh3/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0 /ssh3/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_0 /ssh3/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_1
+Convolution      /ssh3/conv5X5_2/conv5X5_2.0/Conv 1 1 /ssh3/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_1 /ssh3/conv5X5_2/conv5X5_2.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+Convolution      /ssh3/conv7X7_2/conv7X7_2.0/Conv 1 1 /ssh3/conv5X5_1/conv5X5_1.2/LeakyRelu_output_0_splitncnn_0 /ssh3/conv7X7_2/conv7X7_2.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+ReLU             /ssh3/conv7X7_2/conv7X7_2.2/LeakyRelu 1 1 /ssh3/conv7X7_2/conv7X7_2.0/Conv_output_0 /ssh3/conv7X7_2/conv7X7_2.2/LeakyRelu_output_0 0=1.000000e-01
+Convolution      /ssh3/conv7x7_3/conv7x7_3.0/Conv 1 1 /ssh3/conv7X7_2/conv7X7_2.2/LeakyRelu_output_0 /ssh3/conv7x7_3/conv7x7_3.0/Conv_output_0 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 15=1 16=1 5=1 6=2304
+ReLU             /ssh3/Relu               1 1 /ssh3/conv3X3/conv3X3.0/Conv_output_0 /ssh3/Relu_output_0
+ReLU             /ssh3/Relu_1             1 1 /ssh3/conv5X5_2/conv5X5_2.0/Conv_output_0 /ssh3/Relu_1_output_0
+ReLU             /ssh3/Relu_2             1 1 /ssh3/conv7x7_3/conv7x7_3.0/Conv_output_0 /ssh3/Relu_2_output_0
+Concat           /ssh3/Concat             3 1 /ssh3/Relu_output_0 /ssh3/Relu_1_output_0 /ssh3/Relu_2_output_0 /ssh3/Concat_output_0 0=0
+Split            splitncnn_10             1 3 /ssh3/Concat_output_0 /ssh3/Concat_output_0_splitncnn_0 /ssh3/Concat_output_0_splitncnn_1 /ssh3/Concat_output_0_splitncnn_2
+Convolution      /BboxHead.0/conv1x1/Conv 1 1 /ssh1/Concat_output_0_splitncnn_2 /BboxHead.0/conv1x1/Conv_output_0 0=8 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=512
+Convolution      /ClassHead.0/conv1x1/Conv 1 1 /ssh1/Concat_output_0_splitncnn_1 /ClassHead.0/conv1x1/Conv_output_0 0=4 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=256
+Convolution      /LandmarkHead.0/conv1x1/Conv 1 1 /ssh1/Concat_output_0_splitncnn_0 /LandmarkHead.0/conv1x1/Conv_output_0 0=20 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=1280
+Convolution      /BboxHead.1/conv1x1/Conv 1 1 /ssh2/Concat_output_0_splitncnn_2 /BboxHead.1/conv1x1/Conv_output_0 0=8 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=512
+Convolution      /ClassHead.1/conv1x1/Conv 1 1 /ssh2/Concat_output_0_splitncnn_1 /ClassHead.1/conv1x1/Conv_output_0 0=4 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=256
+Convolution      /LandmarkHead.1/conv1x1/Conv 1 1 /ssh2/Concat_output_0_splitncnn_0 /LandmarkHead.1/conv1x1/Conv_output_0 0=20 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=1280
+Convolution      /BboxHead.2/conv1x1/Conv 1 1 /ssh3/Concat_output_0_splitncnn_2 /BboxHead.2/conv1x1/Conv_output_0 0=8 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=512
+Convolution      /ClassHead.2/conv1x1/Conv 1 1 /ssh3/Concat_output_0_splitncnn_1 /ClassHead.2/conv1x1/Conv_output_0 0=4 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=256
+Convolution      /LandmarkHead.2/conv1x1/Conv 1 1 /ssh3/Concat_output_0_splitncnn_0 /LandmarkHead.2/conv1x1/Conv_output_0 0=20 1=1 11=1 2=1 12=1 3=1 13=1 4=0 14=0 15=0 16=0 5=1 6=1280
+Concat           /Concat                  3 1 /BboxHead.0/conv1x1/Conv_output_0 /ClassHead.0/conv1x1/Conv_output_0 /LandmarkHead.0/conv1x1/Conv_output_0 /Concat_output_0 0=0
+Reshape          /Reshape                 1 1 /Concat_output_0 /Reshape_output_0 0=51200
+Concat           /Concat_1                3 1 /BboxHead.1/conv1x1/Conv_output_0 /ClassHead.1/conv1x1/Conv_output_0 /LandmarkHead.1/conv1x1/Conv_output_0 /Concat_1_output_0 0=0
+Reshape          /Reshape_1               1 1 /Concat_1_output_0 /Reshape_1_output_0 0=12800
+Concat           /Concat_2                3 1 /BboxHead.2/conv1x1/Conv_output_0 /ClassHead.2/conv1x1/Conv_output_0 /LandmarkHead.2/conv1x1/Conv_output_0 /Concat_2_output_0 0=0
+Reshape          /Reshape_2               1 1 /Concat_2_output_0 /Reshape_2_output_0 0=3200
+Concat           /Concat_3                3 1 /Reshape_output_0 /Reshape_1_output_0 /Reshape_2_output_0 output 0=0
