@@ -1450,9 +1450,37 @@ static void apply_fp_suppression(face_box* boxes, int* count,
 // ---------------------------
 int main(int argc, char** argv)
 {
-    // Input/Output
-    std::string test_dir = (argc >= 2) ? argv[1] : std::string("../test_ncnn");
-    std::string out_dir  = (argc >= 3) ? argv[2] : std::string("../face_det_outputs");
+    // CLI (new + backward compatible):
+    //   New:    ./face_det_ncnn <model_param> <model_bin> <input_dir> <output_dir>
+    //   Legacy: ./face_det_ncnn <input_dir> <output_dir>
+    //   Default uses built-in model and default input/output dirs.
+    std::string model_param = "../model/face_detector_320x320_20260304_t2.sim.param";
+    std::string model_bin   = "../model/face_detector_320x320_20260304_t2.sim.bin";
+    std::string test_dir    = "../test_ncnn";
+    std::string out_dir     = "../face_det_outputs";
+
+    if (argc == 5)
+    {
+        // New full form
+        model_param = argv[1];
+        model_bin   = argv[2];
+        test_dir    = argv[3];
+        out_dir     = argv[4];
+    }
+    else if (argc == 3)
+    {
+        // Legacy form
+        test_dir = argv[1];
+        out_dir  = argv[2];
+    }
+    else if (argc != 1)
+    {
+        std::cerr << "Usage:\n"
+                  << "  " << argv[0] << " <model_param> <model_bin> <input_dir> <output_dir>\n"
+                  << "  " << argv[0] << " <input_dir> <output_dir>\n"
+                  << "  " << argv[0] << "\n";
+        return -3;
+    }
 
     if (!ensure_dir(out_dir))
     {
@@ -1460,9 +1488,8 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    // Load detector (update these paths if needed)
-    faceDetectModel detector("../model/face_detector_320x320_20260304_t2.sim.param",
-                             "../model/face_detector_320x320_20260304_t2.sim.bin");
+    // Load detector
+    faceDetectModel detector(model_param, model_bin);
 
     // Enumerate images
     std::vector<std::string> images = get_all_images_cvglob(test_dir);
@@ -1480,6 +1507,12 @@ int main(int argc, char** argv)
     // Parameters (precision-first)
     const float draw_threshold = 0.60f; // visualize only boxes >= this after suppression
 
+    // Keep preprocessing consistent with decoder assumptions (320x320 letterbox).
+    ncnn::Mat pad_color(3, 1, 1);
+    pad_color[0] = 104.f; // B
+    pad_color[1] = 117.f; // G
+    pad_color[2] = 123.f; // R
+
     std::cout << "Found " << images.size() << " images." << std::endl;
 
     for (size_t idx = 0; idx < images.size(); idx++)
@@ -1495,7 +1528,9 @@ int main(int argc, char** argv)
         // Run detector
         ncnn::Mat nimg = ncnn::Mat::from_pixels(img.data, ncnn::Mat::PIXEL_BGR, img.cols, img.rows);
 
-        ncnn::Mat det_out = detector.predict(nimg);
+        // Resize to 320x320 with padding before inference.
+        ncnn::Mat nimg_pad = resize_with_padding(nimg, 320, 320, pad_color);
+        ncnn::Mat det_out = detector.predict(nimg_pad);
 
         std::vector<face_box> faces;
         detect_retinaface_forward(nimg, det_out, faces);
