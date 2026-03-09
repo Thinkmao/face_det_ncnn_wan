@@ -170,7 +170,11 @@ static int generate_anchors(int step, const int* min_sizes,
 	return faceCount;
 }
 
-static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, std::vector<face_box>& out_p_faces)
+static int detect_retinaface_forward(const ncnn::Mat& bgr,
+                                     ncnn::Mat& output,
+                                     std::vector<face_box>& out_p_faces,
+                                     int input_w,
+                                     int input_h)
 {
 	// Decode detector output into face boxes + landmarks, then apply NMS.
 	face_box* box_list_32 = nullptr;
@@ -188,7 +192,7 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	int img_w = bgr.w;
 	int img_h = bgr.h;
 
-	int target_size_[2] = { 320, 320 };
+	int target_size_[2] = { input_w, input_h };
 	const int img_size[2] = { img_w, img_h };
 
 	float scale = std::min(static_cast<float>(target_size_[0]) / img_w, static_cast<float>(target_size_[1]) / img_h);
@@ -199,20 +203,27 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 
 	int ptr_ = 0;
 
-	// Stride-8 branch (feature map: 40x40)
+	const int fm32_w = target_size_[0] / 8;
+	const int fm32_h = target_size_[1] / 8;
+	const int fm16_w = target_size_[0] / 16;
+	const int fm16_h = target_size_[1] / 16;
+	const int fm8_w  = target_size_[0] / 32;
+	const int fm8_h  = target_size_[1] / 32;
+
+	// Stride-8 branch
 	float* bbox_blob_32 = &((float*)output.data)[ptr_];
-	ptr_ += 8 * 40 * 40;
+	ptr_ += 8 * fm32_w * fm32_h;
 
 	float* score_blob_32 = &((float*)output.data)[ptr_];
-	ptr_ += 4 * 40 * 40;
+	ptr_ += 4 * fm32_w * fm32_h;
 
 	float* landmark_blob_32 = &((float*)output.data)[ptr_];
-	ptr_ += 20 * 40 * 40;
+	ptr_ += 20 * fm32_w * fm32_h;
 
 	int step_32 = 8;
 	int min_sizes_32[2] = { 16, 32 };
 
-	box_list_32 = (face_box*)malloc(sizeof(face_box) * 40 * 40 * 2);
+	box_list_32 = (face_box*)malloc(sizeof(face_box) * fm32_w * fm32_h * 2);
 	if (!box_list_32)
 	{
 		ret = -3002;
@@ -233,22 +244,22 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	}
 
 	int faceCount32 = generate_anchors(step_32, min_sizes_32, score_blob_32, bbox_blob_32, landmark_blob_32,
-		40, 40, 40, 40, 40, 40, box_list_32, target_size_, img_size);
+		fm32_w, fm32_h, fm32_w, fm32_h, fm32_w, fm32_h, box_list_32, target_size_, img_size);
 
-	// Stride-16 branch (feature map: 20x20)
+	// Stride-16 branch
 	float* bbox_blob_16 = &((float*)output.data)[ptr_];
-	ptr_ += 8 * 20 * 20;
+	ptr_ += 8 * fm16_w * fm16_h;
 
 	float* score_blob_16 = &((float*)output.data)[ptr_];
-	ptr_ += 4 * 20 * 20;
+	ptr_ += 4 * fm16_w * fm16_h;
 
 	float* landmark_blob_16 = &((float*)output.data)[ptr_];
-	ptr_ += 20 * 20 * 20;
+	ptr_ += 20 * fm16_w * fm16_h;
 
 	int step16 = 16;
 	int min_sizes16[2] = { 64, 128 };
 
-	box_list_16 = (face_box*)malloc(sizeof(face_box) * 20 * 20 * 2);
+	box_list_16 = (face_box*)malloc(sizeof(face_box) * fm16_w * fm16_h * 2);
 	if (!box_list_16)
 	{
 		ret = -3003;
@@ -269,14 +280,14 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	}
 
 	int faceCount16 = generate_anchors(step16, min_sizes16, score_blob_16, bbox_blob_16, landmark_blob_16,
-		20, 20, 20, 20, 20, 20, box_list_16, target_size_, img_size);
+		fm16_w, fm16_h, fm16_w, fm16_h, fm16_w, fm16_h, box_list_16, target_size_, img_size);
 
-	// Stride-32 branch (feature map: 10x10)
+	// Stride-32 branch
 	float* bbox_blob_8 = &((float*)output.data)[ptr_];
-	ptr_ += 8 * 10 * 10;
+	ptr_ += 8 * fm8_w * fm8_h;
 
 	float* score_blob_8 = &((float*)output.data)[ptr_];
-	ptr_ += 4 * 10 * 10;
+	ptr_ += 4 * fm8_w * fm8_h;
 
 	float* landmark_blob_8 = &((float*)output.data)[ptr_];
 	// Last blob in the flattened output layout.
@@ -284,7 +295,7 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	int step8 = 32;
 	int min_sizes8[2] = { 256, 512 };
 
-	box_list_8 = (face_box*)malloc(sizeof(face_box) * 10 * 10 * 2);
+	box_list_8 = (face_box*)malloc(sizeof(face_box) * fm8_w * fm8_h * 2);
 	if (!box_list_8)
 	{
 		ret = -3004;
@@ -305,7 +316,7 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	}
 
 	int faceCount8 = generate_anchors(step8, min_sizes8, score_blob_8, bbox_blob_8, landmark_blob_8,
-		10, 10, 10, 10, 10, 10, box_list_8, target_size_, img_size);
+		fm8_w, fm8_h, fm8_w, fm8_h, fm8_w, fm8_h, box_list_8, target_size_, img_size);
 
 	// Merge candidates from three feature levels.
 	int total_face_count = faceCount32 + faceCount16 + faceCount8;
@@ -1434,21 +1445,45 @@ static void apply_fp_suppression(face_box* boxes, int* count,
 int main(int argc, char** argv)
 {
     // CLI (new + backward compatible):
-    //   ./face_det_ncnn <model_param> <model_bin> <input_dir> <output_dir>
-    //   ./face_det_ncnn <input_dir> <output_dir>
+    //   ./face_det_ncnn <model_param> <model_bin> <input_dir> <output_dir> [input_w input_h]
+    //   ./face_det_ncnn <input_dir> <output_dir> [input_w input_h]
     //   ./face_det_ncnn
     std::string model_param = "../model/face_detector_320x320_20260304_t2.sim.param";
     std::string model_bin   = "../model/face_detector_320x320_20260304_t2.sim.bin";
     std::string test_dir    = "../test_ncnn";
     std::string out_dir     = "../face_det_outputs";
+    int input_w = 320;
+    int input_h = 320;
 
-    if (argc == 5)
+    if (argc == 7)
     {
-        // New full form
+        // Full form + input size
         model_param = argv[1];
         model_bin   = argv[2];
         test_dir    = argv[3];
         out_dir     = argv[4];
+        input_w     = std::atoi(argv[5]);
+        input_h     = std::atoi(argv[6]);
+    }
+    else if (argc == 5)
+    {
+        // Ambiguous form:
+        //   model_param/model_bin/input/output  OR  input/output/input_w/input_h
+        std::string arg1 = argv[1];
+        if (arg1.size() >= 6 && arg1.substr(arg1.size() - 6) == ".param")
+        {
+            model_param = argv[1];
+            model_bin   = argv[2];
+            test_dir    = argv[3];
+            out_dir     = argv[4];
+        }
+        else
+        {
+            test_dir = argv[1];
+            out_dir  = argv[2];
+            input_w  = std::atoi(argv[3]);
+            input_h  = std::atoi(argv[4]);
+        }
     }
     else if (argc == 3)
     {
@@ -1459,10 +1494,17 @@ int main(int argc, char** argv)
     else if (argc != 1)
     {
         std::cerr << "Usage:\n"
-                  << "  " << argv[0] << " <model_param> <model_bin> <input_dir> <output_dir>\n"
-                  << "  " << argv[0] << " <input_dir> <output_dir>\n"
+                  << "  " << argv[0] << " <model_param> <model_bin> <input_dir> <output_dir> [input_w input_h]\n"
+                  << "  " << argv[0] << " <input_dir> <output_dir> [input_w input_h]\n"
                   << "  " << argv[0] << "\n";
         return -3;
+    }
+
+    if (input_w <= 0 || input_h <= 0 || input_w % 32 != 0 || input_h % 32 != 0)
+    {
+        std::cerr << "Invalid input size: " << input_w << "x" << input_h
+                  << ". Width/height must be positive and divisible by 32." << std::endl;
+        return -4;
     }
 
     if (!ensure_dir(out_dir))
@@ -1477,6 +1519,7 @@ int main(int argc, char** argv)
     std::cout << "Model param: " << model_param << "\n"
               << "Model bin  : " << model_bin   << "\n"
               << "Input dir  : " << test_dir    << "\n"
+              << "Input size : " << input_w << "x" << input_h << "\n"
               << "Output dir : " << out_dir     << std::endl;
 
     // Enumerate images
@@ -1491,6 +1534,9 @@ int main(int argc, char** argv)
     std::ofstream csv(out_dir + "/results.csv");
     csv << "image_path,face_index,score,x0,y0,x1,y1,"
            "l0x,l0y,l1x,l1y,l2x,l2y,l3x,l3y,l4x,l4y\n";
+
+    std::ofstream perf(out_dir + "/perf.csv");
+    perf << "image_path,preprocess_ms,infer_ms,decode_ms,total_ms,face_count\n";
 
     // Parameters (precision-first)
     const float draw_threshold = 0.60f; // visualize only boxes >= this after suppression
@@ -1513,15 +1559,29 @@ int main(int argc, char** argv)
             continue;
         }
 
+        auto t0 = std::chrono::steady_clock::now();
+
         // Run detector
         ncnn::Mat nimg = ncnn::Mat::from_pixels(img.data, ncnn::Mat::PIXEL_BGR, img.cols, img.rows);
 
-        // Resize to 320x320 with padding before inference.
-        ncnn::Mat nimg_pad = resize_with_padding(nimg, 320, 320, pad_color);
-        ncnn::Mat det_out = detector.predict(nimg_pad);
+        auto t_pre0 = std::chrono::steady_clock::now();
+        ncnn::Mat nimg_pad = resize_with_padding(nimg, input_w, input_h, pad_color);
+        auto t_pre1 = std::chrono::steady_clock::now();
 
+        auto t_infer0 = std::chrono::steady_clock::now();
+        ncnn::Mat det_out = detector.predict(nimg_pad);
+        auto t_infer1 = std::chrono::steady_clock::now();
+
+        auto t_decode0 = std::chrono::steady_clock::now();
         std::vector<face_box> faces;
-        detect_retinaface_forward(nimg, det_out, faces);
+        detect_retinaface_forward(nimg, det_out, faces, input_w, input_h);
+        auto t_decode1 = std::chrono::steady_clock::now();
+        auto t1 = std::chrono::steady_clock::now();
+
+        const double preprocess_ms = std::chrono::duration<double, std::milli>(t_pre1 - t_pre0).count();
+        const double infer_ms      = std::chrono::duration<double, std::milli>(t_infer1 - t_infer0).count();
+        const double decode_ms     = std::chrono::duration<double, std::milli>(t_decode1 - t_decode0).count();
+        const double total_ms      = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
         // Draw
         cv::Mat vis = img.clone();
@@ -1566,11 +1626,18 @@ int main(int argc, char** argv)
         std::string out_path = out_dir + "/vis_" + std::to_string(idx) + ".jpg";
         cv::imwrite(out_path, vis);
 
+        perf << path << ","
+             << preprocess_ms << ","
+             << infer_ms << ","
+             << decode_ms << ","
+             << total_ms << ","
+             << faces.size() << "\n";
+
         if ((idx + 1) % 20 == 0 || idx + 1 == images.size())
         {
             std::cout << "[" << (idx + 1) << "/" << images.size() << "] "
                       << "saved: " << out_path
-                      << " (drawn faces: " << vis_count << ")\n";
+                      << " (drawn faces: " << vis_count << ", total_ms: " << total_ms << ")\n";
         }
     }
 
