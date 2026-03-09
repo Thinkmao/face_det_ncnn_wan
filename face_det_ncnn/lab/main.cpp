@@ -15,7 +15,6 @@
 #ifdef _WIN32
 #include <direct.h>
 #endif
-#include <cmath>
 //#include <time.h>
 
 #ifdef max
@@ -27,7 +26,7 @@
 
 using namespace std;
 
-// ====================== ������� + 5����� ======================
+// Face box + 5 landmarks (RetinaFace-style).
 #define LANDMARK_NUMBER 5
 struct face_landmark {
 	float x[LANDMARK_NUMBER];
@@ -40,6 +39,12 @@ struct face_box {
 };
 
 // Forward declaration (defined near the end of this file)
+// Precision-oriented post-filter for raw candidates before NMS.
+// It only decreases scores / removes boxes; it does not create new boxes.
+// Strategy:
+//   1) size prior      : down-weight boxes much smaller than average size
+//   2) aspect prior    : down-weight highly elongated boxes
+//   3) neighborhood    : down-weight isolated boxes lacking nearby support
 static void apply_fp_suppression(face_box* boxes, int* count,
                                  float prob_gate,
                                  float keep_threshold,
@@ -165,9 +170,13 @@ static int generate_anchors(int step, const int* min_sizes,
 	return faceCount;
 }
 
-static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, std::vector<face_box>& out_p_faces)
+static int detect_retinaface_forward(const ncnn::Mat& bgr,
+                                     ncnn::Mat& output,
+                                     std::vector<face_box>& out_p_faces,
+                                     int input_w,
+                                     int input_h)
 {
-	// ��ʼ������ָ��Ϊnullptr
+	// Decode detector output into face boxes + landmarks, then apply NMS.
 	face_box* box_list_32 = nullptr;
 	face_box* box_list_16 = nullptr;
 	face_box* box_list_8 = nullptr;
@@ -175,7 +184,7 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	int* picked = nullptr;
 	face_box* detectResult = nullptr;
 
-	int ret = 0; // Ĭ�Ϸ���ֵ
+	int ret = 0;
 
 	const float prob_threshold = 0.35f;
 	const float nms_threshold = 0.3f;
@@ -183,12 +192,10 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	int img_w = bgr.w;
 	int img_h = bgr.h;
 
-	int target_size_[2] = { 320, 320 };
+	int target_size_[2] = { input_w, input_h };
 	const int img_size[2] = { img_w, img_h };
 
-	// �������ű���
 	float scale = std::min(static_cast<float>(target_size_[0]) / img_w, static_cast<float>(target_size_[1]) / img_h);
-	// �������ź�ĳߴ�
 	int new_w = static_cast<int>(img_w * scale);
 	int new_h = static_cast<int>(img_h * scale);
 	int top = (target_size_[1] - new_h) / 2;
@@ -196,22 +203,27 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 
 	int ptr_ = 0;
 
-	/****************************** Stride 32 ���� ******************************/
-	// ֱ��ʹ��output.data�е�ָ�룬����malloc
+	const int fm32_w = target_size_[0] / 8;
+	const int fm32_h = target_size_[1] / 8;
+	const int fm16_w = target_size_[0] / 16;
+	const int fm16_h = target_size_[1] / 16;
+	const int fm8_w  = target_size_[0] / 32;
+	const int fm8_h  = target_size_[1] / 32;
+
+	// Stride-8 branch
 	float* bbox_blob_32 = &((float*)output.data)[ptr_];
-	ptr_ += 8 * 40 * 40;
+	ptr_ += 8 * fm32_w * fm32_h;
 
 	float* score_blob_32 = &((float*)output.data)[ptr_];
-	ptr_ += 4 * 40 * 40;
+	ptr_ += 4 * fm32_w * fm32_h;
 
 	float* landmark_blob_32 = &((float*)output.data)[ptr_];
-	ptr_ += 20 * 40 * 40;
+	ptr_ += 20 * fm32_w * fm32_h;
 
 	int step_32 = 8;
 	int min_sizes_32[2] = { 16, 32 };
 
-	// ����box_list�ڴ�
-	box_list_32 = (face_box*)malloc(sizeof(face_box) * 40 * 40 * 2);
+	box_list_32 = (face_box*)malloc(sizeof(face_box) * fm32_w * fm32_h * 2);
 	if (!box_list_32)
 	{
 		ret = -3002;
@@ -222,7 +234,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 		if (box_list_8)
 			free(box_list_8);
 
-		// �ͷ��м���
 		if (total_face_box)
 			free(total_face_box);
 		if (picked)
@@ -233,22 +244,22 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	}
 
 	int faceCount32 = generate_anchors(step_32, min_sizes_32, score_blob_32, bbox_blob_32, landmark_blob_32,
-		40, 40, 40, 40, 40, 40, box_list_32, target_size_, img_size);
+		fm32_w, fm32_h, fm32_w, fm32_h, fm32_w, fm32_h, box_list_32, target_size_, img_size);
 
-	/****************************** Stride 16 ���� ******************************/
+	// Stride-16 branch
 	float* bbox_blob_16 = &((float*)output.data)[ptr_];
-	ptr_ += 8 * 20 * 20;
+	ptr_ += 8 * fm16_w * fm16_h;
 
 	float* score_blob_16 = &((float*)output.data)[ptr_];
-	ptr_ += 4 * 20 * 20;
+	ptr_ += 4 * fm16_w * fm16_h;
 
 	float* landmark_blob_16 = &((float*)output.data)[ptr_];
-	ptr_ += 20 * 20 * 20;
+	ptr_ += 20 * fm16_w * fm16_h;
 
 	int step16 = 16;
 	int min_sizes16[2] = { 64, 128 };
 
-	box_list_16 = (face_box*)malloc(sizeof(face_box) * 20 * 20 * 2);
+	box_list_16 = (face_box*)malloc(sizeof(face_box) * fm16_w * fm16_h * 2);
 	if (!box_list_16)
 	{
 		ret = -3003;
@@ -259,7 +270,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 		if (box_list_8)
 			free(box_list_8);
 
-		// �ͷ��м���
 		if (total_face_box)
 			free(total_face_box);
 		if (picked)
@@ -270,22 +280,22 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	}
 
 	int faceCount16 = generate_anchors(step16, min_sizes16, score_blob_16, bbox_blob_16, landmark_blob_16,
-		20, 20, 20, 20, 20, 20, box_list_16, target_size_, img_size);
+		fm16_w, fm16_h, fm16_w, fm16_h, fm16_w, fm16_h, box_list_16, target_size_, img_size);
 
-	/****************************** Stride 8 ���� ******************************/
+	// Stride-32 branch
 	float* bbox_blob_8 = &((float*)output.data)[ptr_];
-	ptr_ += 8 * 10 * 10;
+	ptr_ += 8 * fm8_w * fm8_h;
 
 	float* score_blob_8 = &((float*)output.data)[ptr_];
-	ptr_ += 4 * 10 * 10;
+	ptr_ += 4 * fm8_w * fm8_h;
 
 	float* landmark_blob_8 = &((float*)output.data)[ptr_];
-	// ע�⣺���ﲻ��Ҫ���ƶ�ptr����Ϊ�������һ��blob
+	// Last blob in the flattened output layout.
 
 	int step8 = 32;
 	int min_sizes8[2] = { 256, 512 };
 
-	box_list_8 = (face_box*)malloc(sizeof(face_box) * 10 * 10 * 2);
+	box_list_8 = (face_box*)malloc(sizeof(face_box) * fm8_w * fm8_h * 2);
 	if (!box_list_8)
 	{
 		ret = -3004;
@@ -296,7 +306,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 		if (box_list_8)
 			free(box_list_8);
 
-		// �ͷ��м���
 		if (total_face_box)
 			free(total_face_box);
 		if (picked)
@@ -307,9 +316,9 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	}
 
 	int faceCount8 = generate_anchors(step8, min_sizes8, score_blob_8, bbox_blob_8, landmark_blob_8,
-		10, 10, 10, 10, 10, 10, box_list_8, target_size_, img_size);
+		fm8_w, fm8_h, fm8_w, fm8_h, fm8_w, fm8_h, box_list_8, target_size_, img_size);
 
-	/****************************** �ϲ���� ******************************/
+	// Merge candidates from three feature levels.
 	int total_face_count = faceCount32 + faceCount16 + faceCount8;
 	if (total_face_count == 0)
 	{
@@ -321,7 +330,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 		if (box_list_8)
 			free(box_list_8);
 
-		// �ͷ��м���
 		if (total_face_box)
 			free(total_face_box);
 		if (picked)
@@ -342,7 +350,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 		if (box_list_8)
 			free(box_list_8);
 
-		// �ͷ��м���
 		if (total_face_box)
 			free(total_face_box);
 		if (picked)
@@ -352,29 +359,24 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 		return ret;
 	}
 
-	// �޸�ָ��ƫ�ƣ�ʹ��Ԫ��ƫ�ƶ����ֽ�ƫ��
 	memcpy(total_face_box, box_list_32, sizeof(face_box) * faceCount32);
 	memcpy(total_face_box + faceCount32, box_list_16, sizeof(face_box) * faceCount16);
 	memcpy(total_face_box + faceCount32 + faceCount16, box_list_8, sizeof(face_box) * faceCount8);
 
 	
     // ---------------- FP suppression (precision-first) ----------------
-    // This step penalizes likely false positives BEFORE sorting + NMS:
-    //  1) small-box linear decay vs average size
-    //  2) extreme aspect-ratio penalty
-    //  3) center-density penalty for isolated boxes
-    // Then filters boxes with score < keep_threshold.
+    // Tune these values when moving to a new dataset/model.
     {
-        const float fp_prob_gate        = 0.50f; // boxes below this don't contribute to stats
-        const float fp_keep_threshold   = 0.60f; // precision-first keep threshold
-        const float fp_size_ratio_thr   = 0.60f; // small if size < avg*ratio
-        const float fp_ar_start         = 1.80f; // start penalizing when ar_sym > 1.8
-        const float fp_ar_hard          = 3.00f; // near-drop when ar_sym >= 3.0
-        const float fp_ar_k             = 1.20f; // exp penalty strength
-        const float fp_density_iou_thr  = 0.05f; // neighbor must overlap a bit
-        const int   fp_density_min_nbr  = 2;     // isolated if < 2 neighbors
-        const float fp_density_r_scale  = 0.25f; // r = 0.25*min(w,h) + bias
-        const float fp_density_bias_px  = 4.0f;
+        const float fp_prob_gate        = 0.50f; // only candidates above this score contribute to priors
+        const float fp_keep_threshold   = 0.60f; // final minimum score after all penalties
+        const float fp_size_ratio_thr   = 0.60f; // "small" when sqrt(area) < avg_size * ratio
+        const float fp_ar_start         = 1.80f; // start penalizing when max(w/h, h/w) > this
+        const float fp_ar_hard          = 3.00f; // heavy penalty for extremely elongated boxes
+        const float fp_ar_k             = 1.20f; // slope of aspect-ratio exponential decay
+        const float fp_density_iou_thr  = 0.05f; // neighbor must have at least slight overlap
+        const int   fp_density_min_nbr  = 2;     // expected nearby supporting candidates
+        const float fp_density_r_scale  = 0.25f; // neighbor radius = r_scale * min(w,h) + bias
+        const float fp_density_bias_px  = 4.0f;  // minimum radius bias (pixels)
 
         apply_fp_suppression(total_face_box, &total_face_count,
                              fp_prob_gate,
@@ -384,10 +386,9 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
                              fp_density_iou_thr, fp_density_min_nbr,
                              fp_density_r_scale, fp_density_bias_px);
     }
-// �����Ŷ�����
+	// Sort by score before NMS.
 	qsort_descent_inplace(total_face_box, total_face_count);
 
-	/****************************** NMS���� ******************************/
 	picked = (int*)malloc(sizeof(int) * total_face_count);
 	if (!picked)
 	{
@@ -399,7 +400,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 		if (box_list_8)
 			free(box_list_8);
 
-		// �ͷ��м���
 		if (total_face_box)
 			free(total_face_box);
 		if (picked)
@@ -411,7 +411,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 
 	int pickedFaceCount = nms_sorted_bboxes(total_face_box, total_face_count, picked, nms_threshold);
 
-	/****************************** �������ս�� ******************************/
 	detectResult = (face_box*)malloc(sizeof(face_box) * pickedFaceCount);
 	if (!detectResult)
 	{
@@ -423,7 +422,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 		if (box_list_8)
 			free(box_list_8);
 
-		// �ͷ��м���
 		if (total_face_box)
 			free(total_face_box);
 		if (picked)
@@ -435,21 +433,18 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 
 	for (int i = 0; i < pickedFaceCount; i++)
 	{
-		// ���ƽṹ��
 		detectResult[i] = total_face_box[picked[i]];
 
-		// padding������ת������320x320�ռ�ת����ԭʼͼ��ռ�
+		// Map coordinates from letterboxed 320x320 space back to original image.
 		detectResult[i].x0 = (detectResult[i].x0 - left) / scale;
 		detectResult[i].y0 = (detectResult[i].y0 - top) / scale;
 		detectResult[i].x1 = (detectResult[i].x1 - left) / scale;
 		detectResult[i].y1 = (detectResult[i].y1 - top) / scale;
-		// �ؼ�������ת��
 		for (int landmark_idx = 0; landmark_idx < LANDMARK_NUMBER; landmark_idx++) {
 			detectResult[i].landmark.x[landmark_idx] = (detectResult[i].landmark.x[landmark_idx] - left) / scale;
 			detectResult[i].landmark.y[landmark_idx] = (detectResult[i].landmark.y[landmark_idx] - top) / scale;
 		}
 
-		// ���ӵ��������
 		out_p_faces.push_back(detectResult[i]);
 	}
 
@@ -460,7 +455,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 	if (box_list_8)
 		free(box_list_8);
 
-	// �ͷ��м���
 	if (total_face_box)
 		free(total_face_box);
 	if (picked)
@@ -1450,9 +1444,68 @@ static void apply_fp_suppression(face_box* boxes, int* count,
 // ---------------------------
 int main(int argc, char** argv)
 {
-    // Input/Output
-    std::string test_dir = (argc >= 2) ? argv[1] : std::string("../test_ncnn");
-    std::string out_dir  = (argc >= 3) ? argv[2] : std::string("../face_det_outputs");
+    // CLI (new + backward compatible):
+    //   ./face_det_ncnn <model_param> <model_bin> <input_dir> <output_dir> [input_w input_h]
+    //   ./face_det_ncnn <input_dir> <output_dir> [input_w input_h]
+    //   ./face_det_ncnn
+    std::string model_param = "../model/face_detector_320x320_20260304_t2.sim.param";
+    std::string model_bin   = "../model/face_detector_320x320_20260304_t2.sim.bin";
+    std::string test_dir    = "../test_ncnn";
+    std::string out_dir     = "../face_det_outputs";
+    int input_w = 320;
+    int input_h = 320;
+
+    if (argc == 7)
+    {
+        // Full form + input size
+        model_param = argv[1];
+        model_bin   = argv[2];
+        test_dir    = argv[3];
+        out_dir     = argv[4];
+        input_w     = std::atoi(argv[5]);
+        input_h     = std::atoi(argv[6]);
+    }
+    else if (argc == 5)
+    {
+        // Ambiguous form:
+        //   model_param/model_bin/input/output  OR  input/output/input_w/input_h
+        std::string arg1 = argv[1];
+        if (arg1.size() >= 6 && arg1.substr(arg1.size() - 6) == ".param")
+        {
+            model_param = argv[1];
+            model_bin   = argv[2];
+            test_dir    = argv[3];
+            out_dir     = argv[4];
+        }
+        else
+        {
+            test_dir = argv[1];
+            out_dir  = argv[2];
+            input_w  = std::atoi(argv[3]);
+            input_h  = std::atoi(argv[4]);
+        }
+    }
+    else if (argc == 3)
+    {
+        // Legacy form
+        test_dir = argv[1];
+        out_dir  = argv[2];
+    }
+    else if (argc != 1)
+    {
+        std::cerr << "Usage:\n"
+                  << "  " << argv[0] << " <model_param> <model_bin> <input_dir> <output_dir> [input_w input_h]\n"
+                  << "  " << argv[0] << " <input_dir> <output_dir> [input_w input_h]\n"
+                  << "  " << argv[0] << "\n";
+        return -3;
+    }
+
+    if (input_w <= 0 || input_h <= 0 || input_w % 32 != 0 || input_h % 32 != 0)
+    {
+        std::cerr << "Invalid input size: " << input_w << "x" << input_h
+                  << ". Width/height must be positive and divisible by 32." << std::endl;
+        return -4;
+    }
 
     if (!ensure_dir(out_dir))
     {
@@ -1460,9 +1513,14 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    // Load detector (update these paths if needed)
-    faceDetectModel detector("../model/face_detector_320x320_20260304_t2.sim.param",
-                             "../model/face_detector_320x320_20260304_t2.sim.bin");
+    // Load detector
+    faceDetectModel detector(model_param, model_bin);
+
+    std::cout << "Model param: " << model_param << "\n"
+              << "Model bin  : " << model_bin   << "\n"
+              << "Input dir  : " << test_dir    << "\n"
+              << "Input size : " << input_w << "x" << input_h << "\n"
+              << "Output dir : " << out_dir     << std::endl;
 
     // Enumerate images
     std::vector<std::string> images = get_all_images_cvglob(test_dir);
@@ -1477,8 +1535,17 @@ int main(int argc, char** argv)
     csv << "image_path,face_index,score,x0,y0,x1,y1,"
            "l0x,l0y,l1x,l1y,l2x,l2y,l3x,l3y,l4x,l4y\n";
 
+    std::ofstream perf(out_dir + "/perf.csv");
+    perf << "image_path,preprocess_ms,infer_ms,decode_ms,total_ms,face_count\n";
+
     // Parameters (precision-first)
     const float draw_threshold = 0.60f; // visualize only boxes >= this after suppression
+
+    // Keep preprocessing consistent with decoder assumptions (320x320 letterbox).
+    ncnn::Mat pad_color(3, 1, 1);
+    pad_color[0] = 104.f; // B
+    pad_color[1] = 117.f; // G
+    pad_color[2] = 123.f; // R
 
     std::cout << "Found " << images.size() << " images." << std::endl;
 
@@ -1492,13 +1559,29 @@ int main(int argc, char** argv)
             continue;
         }
 
+        auto t0 = std::chrono::steady_clock::now();
+
         // Run detector
         ncnn::Mat nimg = ncnn::Mat::from_pixels(img.data, ncnn::Mat::PIXEL_BGR, img.cols, img.rows);
 
-        ncnn::Mat det_out = detector.predict(nimg);
+        auto t_pre0 = std::chrono::steady_clock::now();
+        ncnn::Mat nimg_pad = resize_with_padding(nimg, input_w, input_h, pad_color);
+        auto t_pre1 = std::chrono::steady_clock::now();
 
+        auto t_infer0 = std::chrono::steady_clock::now();
+        ncnn::Mat det_out = detector.predict(nimg_pad);
+        auto t_infer1 = std::chrono::steady_clock::now();
+
+        auto t_decode0 = std::chrono::steady_clock::now();
         std::vector<face_box> faces;
-        detect_retinaface_forward(nimg, det_out, faces);
+        detect_retinaface_forward(nimg, det_out, faces, input_w, input_h);
+        auto t_decode1 = std::chrono::steady_clock::now();
+        auto t1 = std::chrono::steady_clock::now();
+
+        const double preprocess_ms = std::chrono::duration<double, std::milli>(t_pre1 - t_pre0).count();
+        const double infer_ms      = std::chrono::duration<double, std::milli>(t_infer1 - t_infer0).count();
+        const double decode_ms     = std::chrono::duration<double, std::milli>(t_decode1 - t_decode0).count();
+        const double total_ms      = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
         // Draw
         cv::Mat vis = img.clone();
@@ -1543,11 +1626,18 @@ int main(int argc, char** argv)
         std::string out_path = out_dir + "/vis_" + std::to_string(idx) + ".jpg";
         cv::imwrite(out_path, vis);
 
+        perf << path << ","
+             << preprocess_ms << ","
+             << infer_ms << ","
+             << decode_ms << ","
+             << total_ms << ","
+             << faces.size() << "\n";
+
         if ((idx + 1) % 20 == 0 || idx + 1 == images.size())
         {
             std::cout << "[" << (idx + 1) << "/" << images.size() << "] "
                       << "saved: " << out_path
-                      << " (drawn faces: " << vis_count << ")\n";
+                      << " (drawn faces: " << vis_count << ", total_ms: " << total_ms << ")\n";
         }
     }
 
