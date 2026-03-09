@@ -82,6 +82,77 @@ static int nms_sorted_bboxes(face_box* faceobjects, const int faceCount, int* pi
 	return n;
 }
 
+static bool is_point_inside_margin_box(float x, float y, const face_box& box, float margin_ratio)
+{
+	const float bw = std::max(1.0f, box.x1 - box.x0);
+	const float bh = std::max(1.0f, box.y1 - box.y0);
+	const float mx = bw * margin_ratio;
+	const float my = bh * margin_ratio;
+	return x >= (box.x0 - mx) && x <= (box.x1 + mx) && y >= (box.y0 - my) && y <= (box.y1 + my);
+}
+
+// Landmark based suppression.
+// Keep constraints loose enough for profile faces while rejecting obvious geometric outliers.
+static bool is_landmark_layout_reasonable(const face_box& face, int img_w, int img_h)
+{
+	const float bw = std::max(1.0f, face.x1 - face.x0);
+	const float bh = std::max(1.0f, face.y1 - face.y0);
+	if (bw < 4.f || bh < 4.f) return false;
+
+	int inside_cnt = 0;
+	for (int i = 0; i < LANDMARK_NUMBER; ++i) {
+		if (is_point_inside_margin_box(face.landmark.x[i], face.landmark.y[i], face, 0.2f)) {
+			inside_cnt++;
+		}
+	}
+	// For profile faces, allow one landmark to drift out.
+	if (inside_cnt < 4) return false;
+
+	const float eye_dx = face.landmark.x[1] - face.landmark.x[0];
+	const float eye_dy = face.landmark.y[1] - face.landmark.y[0];
+	const float eye_dist = std::sqrt(eye_dx * eye_dx + eye_dy * eye_dy);
+	const float mouth_dx = face.landmark.x[4] - face.landmark.x[3];
+	const float mouth_dy = face.landmark.y[4] - face.landmark.y[3];
+	const float mouth_dist = std::sqrt(mouth_dx * mouth_dx + mouth_dy * mouth_dy);
+
+	// Eye distance can be very small on profile faces, but not zero for stable boxes.
+	if (eye_dist / bw < 0.02f || eye_dist / bw > 0.95f) return false;
+	if (mouth_dist / bw > 0.95f) return false;
+
+	const float eye_cy = 0.5f * (face.landmark.y[0] + face.landmark.y[1]);
+	const float mouth_cy = 0.5f * (face.landmark.y[3] + face.landmark.y[4]);
+	const float nose_y = face.landmark.y[2];
+	const float y_slack = 0.35f * bh;
+
+	// Typical order: eyes -> nose -> mouth. Keep large tolerance for pose and roll.
+	if (mouth_cy < eye_cy - y_slack) return false;
+	if (nose_y < eye_cy - y_slack || nose_y > mouth_cy + y_slack) return false;
+
+	float min_lx = face.landmark.x[0], max_lx = face.landmark.x[0];
+	float min_ly = face.landmark.y[0], max_ly = face.landmark.y[0];
+	for (int i = 1; i < LANDMARK_NUMBER; ++i) {
+		min_lx = std::min(min_lx, face.landmark.x[i]);
+		max_lx = std::max(max_lx, face.landmark.x[i]);
+		min_ly = std::min(min_ly, face.landmark.y[i]);
+		max_ly = std::max(max_ly, face.landmark.y[i]);
+	}
+
+	const float lmk_span_y = max_ly - min_ly;
+	if (lmk_span_y / bh < 0.08f || lmk_span_y / bh > 1.1f) return false;
+
+	const float cx = 0.2f * (face.landmark.x[0] + face.landmark.x[1] + face.landmark.x[2] + face.landmark.x[3] + face.landmark.x[4]);
+	const float cy = 0.2f * (face.landmark.y[0] + face.landmark.y[1] + face.landmark.y[2] + face.landmark.y[3] + face.landmark.y[4]);
+	if (!is_point_inside_margin_box(cx, cy, face, 0.35f)) return false;
+
+	// Extra safety: if the entire box is far outside image bounds, suppress.
+	if (face.x1 < -0.3f * bw || face.y1 < -0.3f * bh ||
+		face.x0 > img_w + 0.3f * bw || face.y0 > img_h + 0.3f * bh) {
+		return false;
+	}
+
+	return true;
+}
+
 static int generate_anchors(int step, const int* min_sizes,
 	float* score_blob, float* bbox_blob, float* landmark_blob,
 	int box_w, int box_h, int score_w, int score_h, int land_w, int land_h,
@@ -384,7 +455,9 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 			detectResult[i].landmark.y[landmark_idx] = (detectResult[i].landmark.y[landmark_idx] - top) / scale;
 		}
 
-		out_p_faces.push_back(detectResult[i]);
+		if (is_landmark_layout_reasonable(detectResult[i], img_w, img_h)) {
+			out_p_faces.push_back(detectResult[i]);
+		}
 	}
 
 	if (box_list_32)
@@ -1344,4 +1417,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
