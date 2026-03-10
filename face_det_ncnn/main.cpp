@@ -140,9 +140,14 @@ static bool is_landmark_layout_reasonable(const face_box& face, int img_w, int i
 	const float lmk_span_y = max_ly - min_ly;
 	if (lmk_span_y / bh < 0.08f || lmk_span_y / bh > 1.1f) return false;
 
+	// "landmarks质心与边框比例约束":
+	// 将5个landmark的质心映射到bbox局部坐标系，检查它落在一个宽松的比例区间内。
+	// 这样可以过滤掉关键点整体漂移到框外的异常情况，同时保留侧脸（允许一定越界）。
 	const float cx = 0.2f * (face.landmark.x[0] + face.landmark.x[1] + face.landmark.x[2] + face.landmark.x[3] + face.landmark.x[4]);
 	const float cy = 0.2f * (face.landmark.y[0] + face.landmark.y[1] + face.landmark.y[2] + face.landmark.y[3] + face.landmark.y[4]);
-	if (!is_point_inside_margin_box(cx, cy, face, 0.35f)) return false;
+	const float cx_ratio = (cx - face.x0) / bw;
+	const float cy_ratio = (cy - face.y0) / bh;
+	if (cx_ratio < -0.35f || cx_ratio > 1.35f || cy_ratio < -0.35f || cy_ratio > 1.35f) return false;
 
 	// Extra safety: if the entire box is far outside image bounds, suppress.
 	if (face.x1 < -0.3f * bw || face.y1 < -0.3f * bh ||
