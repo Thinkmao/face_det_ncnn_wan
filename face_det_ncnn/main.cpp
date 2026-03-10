@@ -115,14 +115,40 @@ static bool is_landmark_layout_reasonable(const face_box& face, int img_w, int i
 	const float mouth_dy = face.landmark.y[4] - face.landmark.y[3];
 	const float mouth_dist = std::sqrt(mouth_dx * mouth_dx + mouth_dy * mouth_dy);
 
-	// Eye distance can be very small on profile faces, but not zero for stable boxes.
-	if (eye_dist / bw < 0.02f || eye_dist / bw > 0.95f) return false;
+	const float nose_x = face.landmark.x[2];
+	const float eye_min_x = std::min(face.landmark.x[0], face.landmark.x[1]);
+	const float eye_max_x = std::max(face.landmark.x[0], face.landmark.x[1]);
+	const float mouth_min_x = std::min(face.landmark.x[3], face.landmark.x[4]);
+	const float mouth_max_x = std::max(face.landmark.x[3], face.landmark.x[4]);
+	const bool nose_on_same_side_of_eyes_and_mouth =
+		(nose_x < eye_min_x && nose_x < mouth_min_x) ||
+		(nose_x > eye_max_x && nose_x > mouth_max_x);
+
+	// 双眼/嘴角距离相对框宽比例约束：侧脸时鼻子可能在眼/嘴同侧，允许放宽下限。
+	if (!nose_on_same_side_of_eyes_and_mouth && eye_dist / bw < 0.02f) return false;
+	if (!nose_on_same_side_of_eyes_and_mouth && mouth_dist / bw < 0.02f) return false;
+	if (eye_dist / bw > 0.95f) return false;
 	if (mouth_dist / bw > 0.95f) return false;
 
 	const float eye_cy = 0.5f * (face.landmark.y[0] + face.landmark.y[1]);
 	const float mouth_cy = 0.5f * (face.landmark.y[3] + face.landmark.y[4]);
 	const float nose_y = face.landmark.y[2];
 	const float y_slack = 0.35f * bh;
+
+	// 眼嘴的纵向距离相对框高比例约束。
+	const float eye_mouth_dy_ratio = std::fabs(mouth_cy - eye_cy) / bh;
+	if (eye_mouth_dy_ratio < 0.08f || eye_mouth_dy_ratio > 1.05f) return false;
+
+	// 鼻距离眼/嘴相对框大小比例约束（取到眼中心/嘴中心距离）。
+	const float nose_eye_dist = std::sqrt((nose_x - 0.5f * (face.landmark.x[0] + face.landmark.x[1])) *
+		(nose_x - 0.5f * (face.landmark.x[0] + face.landmark.x[1])) +
+		(nose_y - eye_cy) * (nose_y - eye_cy));
+	const float nose_mouth_dist = std::sqrt((nose_x - 0.5f * (face.landmark.x[3] + face.landmark.x[4])) *
+		(nose_x - 0.5f * (face.landmark.x[3] + face.landmark.x[4])) +
+		(nose_y - mouth_cy) * (nose_y - mouth_cy));
+	const float box_diag = std::sqrt(bw * bw + bh * bh);
+	if (nose_eye_dist / box_diag < 0.02f || nose_eye_dist / box_diag > 0.85f) return false;
+	if (nose_mouth_dist / box_diag < 0.02f || nose_mouth_dist / box_diag > 0.85f) return false;
 
 	// Typical order: eyes -> nose -> mouth. Keep large tolerance for pose and roll.
 	if (mouth_cy < eye_cy - y_slack) return false;
