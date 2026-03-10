@@ -30,24 +30,29 @@ struct LandmarkSuppressionParams {
 };
 
 struct BoxSuppressionParams {
-    float min_face_size = 10.f;
-    float max_aspect_ratio = 1.8f;
-    float min_aspect_ratio = 0.55f;
+    // Original lab/main.cpp apply_fp_suppression style params
+    float prob_gate = 0.50f;
+    float size_ratio_thr = 0.60f;
 
-    float size_fail_multiplier = 0.75f;
-    float aspect_fail_multiplier = 0.8f;
-};
+    float ar_start = 1.80f;
+    float ar_hard = 3.00f;
+    float ar_k = 1.20f;
 
-struct IsolationSuppressionParams {
-    float isolated_dist_ratio = 2.8f;
-    float isolated_fail_multiplier = 0.85f;
+    float density_iou_thr = 0.05f;
+    int density_min_nbr = 2;
+    float density_r_scale = 0.25f;
+    float density_bias_px = 4.0f;
+
+    // Penalty factors from original logic
+    float ar_hard_multiplier = 0.05f;
+    float isolated_zero_nbr_multiplier = 0.35f;
+    float isolated_one_nbr_multiplier = 0.65f;
 };
 
 struct ScoreSuppressionConfig {
     float draw_threshold = 0.6f;
     LandmarkSuppressionParams landmark;
     BoxSuppressionParams box;
-    IsolationSuppressionParams isolation;
 };
 
 float compute_landmark_score_multiplier(const face_box& face, int img_w, int img_h,

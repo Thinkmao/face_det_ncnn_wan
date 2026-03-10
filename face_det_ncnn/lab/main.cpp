@@ -1,5 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include "net.h"
+#include "../face_types.h"
+#include "../detection_suppression.h"
 #include <vector>
 #include <map>
 #include <cmath>
@@ -25,33 +27,6 @@
 #endif
 
 using namespace std;
-
-// Face box + 5 landmarks (RetinaFace-style).
-#define LANDMARK_NUMBER 5
-struct face_landmark {
-	float x[LANDMARK_NUMBER];
-	float y[LANDMARK_NUMBER];
-};
-struct face_box {
-	float x0, y0, x1, y1;
-	float score;
-	face_landmark landmark;
-};
-
-// Forward declaration (defined near the end of this file)
-// Precision-oriented post-filter for raw candidates before NMS.
-// It only decreases scores / removes boxes; it does not create new boxes.
-// Strategy:
-//   1) size prior      : down-weight boxes much smaller than average size
-//   2) aspect prior    : down-weight highly elongated boxes
-//   3) neighborhood    : down-weight isolated boxes lacking nearby support
-static void apply_fp_suppression(face_box* boxes, int* count,
-                                 float prob_gate,
-                                 float keep_threshold,
-                                 float size_ratio_thr,
-                                 float ar_start, float ar_hard, float ar_k,
-                                 float density_iou_thr, int density_min_nbr,
-                                 float density_r_scale, float density_bias_px);
 
 static bool ensure_dir(const std::string& dir);
 static std::vector<std::string> get_all_images_cvglob(const std::string& base_dir);
@@ -364,28 +339,6 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr,
 	memcpy(total_face_box + faceCount32 + faceCount16, box_list_8, sizeof(face_box) * faceCount8);
 
 	
-    // ---------------- FP suppression (precision-first) ----------------
-    // Tune these values when moving to a new dataset/model.
-    {
-        const float fp_prob_gate        = 0.50f; // only candidates above this score contribute to priors
-        const float fp_keep_threshold   = 0.60f; // final minimum score after all penalties
-        const float fp_size_ratio_thr   = 0.60f; // "small" when sqrt(area) < avg_size * ratio
-        const float fp_ar_start         = 1.80f; // start penalizing when max(w/h, h/w) > this
-        const float fp_ar_hard          = 3.00f; // heavy penalty for extremely elongated boxes
-        const float fp_ar_k             = 1.20f; // slope of aspect-ratio exponential decay
-        const float fp_density_iou_thr  = 0.05f; // neighbor must have at least slight overlap
-        const int   fp_density_min_nbr  = 2;     // expected nearby supporting candidates
-        const float fp_density_r_scale  = 0.25f; // neighbor radius = r_scale * min(w,h) + bias
-        const float fp_density_bias_px  = 4.0f;  // minimum radius bias (pixels)
-
-        apply_fp_suppression(total_face_box, &total_face_count,
-                             fp_prob_gate,
-                             fp_keep_threshold,
-                             fp_size_ratio_thr,
-                             fp_ar_start, fp_ar_hard, fp_ar_k,
-                             fp_density_iou_thr, fp_density_min_nbr,
-                             fp_density_r_scale, fp_density_bias_px);
-    }
 	// Sort by score before NMS.
 	qsort_descent_inplace(total_face_box, total_face_count);
 
@@ -1286,162 +1239,6 @@ static std::vector<std::string> get_all_images_cvglob(const std::string& base_di
     return out;
 }
 
-// ---------------------------
-// FP suppression (precision-first) for decoded candidates (before sort + NMS)
-// Applies:
-//  1) size linear decay vs average size
-//  2) aspect ratio penalty (thin/flat boxes)
-//  3) center density penalty (isolated boxes)
-// Then drops boxes with score < keep_threshold
-// ---------------------------
-static inline float box_w(const face_box& b) { return b.x1 - b.x0; }
-static inline float box_h(const face_box& b) { return b.y1 - b.y0; }
-
-static inline float box_size_sqrt_area(const face_box& b)
-{
-    float w = box_w(b), h = box_h(b);
-    if (w <= 0.f || h <= 0.f) return 0.f;
-    return std::sqrt(w * h);
-}
-
-static inline float box_iou(const face_box& a, const face_box& b)
-{
-    float inter_x0 = std::max(a.x0, b.x0);
-    float inter_y0 = std::max(a.y0, b.y0);
-    float inter_x1 = std::min(a.x1, b.x1);
-    float inter_y1 = std::min(a.y1, b.y1);
-    float iw = inter_x1 - inter_x0;
-    float ih = inter_y1 - inter_y0;
-    if (iw <= 0.f || ih <= 0.f) return 0.f;
-    float inter = iw * ih;
-    float area_a = std::max(0.f, box_w(a)) * std::max(0.f, box_h(a));
-    float area_b = std::max(0.f, box_w(b)) * std::max(0.f, box_h(b));
-    float uni = area_a + area_b - inter;
-    return uni > 0.f ? (inter / uni) : 0.f;
-}
-
-static void apply_fp_suppression(face_box* boxes, int* count,
-                                 float prob_gate,
-                                 float keep_threshold,
-                                 float size_ratio_thr,
-                                 float ar_start, float ar_hard, float ar_k,
-                                 float density_iou_thr, int density_min_nbr,
-                                 float density_r_scale, float density_bias_px)
-{
-    const int n = *count;
-    if (!boxes || n <= 0) return;
-
-    // --- average size over boxes with score >= prob_gate
-    float sum_size = 0.f;
-    int cnt = 0;
-    for (int i = 0; i < n; i++)
-    {
-        if (boxes[i].score < prob_gate) continue;
-        float s = box_size_sqrt_area(boxes[i]);
-        if (s <= 0.f) continue;
-        sum_size += s;
-        cnt++;
-    }
-    const float avg_size = (cnt > 0) ? (sum_size / cnt) : 0.f;
-    const float size_thr = avg_size * size_ratio_thr;
-
-    // --- precompute centers
-    std::vector<float> cx(n), cy(n), ww(n), hh(n);
-    for (int i = 0; i < n; i++)
-    {
-        cx[i] = 0.5f * (boxes[i].x0 + boxes[i].x1);
-        cy[i] = 0.5f * (boxes[i].y0 + boxes[i].y1);
-        ww[i] = box_w(boxes[i]);
-        hh[i] = box_h(boxes[i]);
-    }
-
-    // --- apply penalties
-    for (int i = 0; i < n; i++)
-    {
-        float score = boxes[i].score;
-        if (score < prob_gate) continue;
-
-        float w = ww[i], h = hh[i];
-        if (w <= 0.f || h <= 0.f) { boxes[i].score = 0.f; continue; }
-
-        // (1) size linear decay for small boxes
-        if (size_thr > 0.f)
-        {
-            float s = std::sqrt(w * h); // already in target_size pixel space
-            if (s > 0.f && s < size_thr)
-            {
-                float factor = s / size_thr; // linear in (0,1)
-                if (factor < 0.f) factor = 0.f;
-                if (factor > 1.f) factor = 1.f;
-                score *= factor;
-            }
-        }
-
-        // (2) aspect ratio penalty (suppress very thin/flat boxes)
-        {
-            float ar = w / h;
-            float ar_sym = ar >= 1.f ? ar : (1.f / ar); // >=1
-            if (ar_sym >= ar_hard)
-            {
-                score *= 0.05f; // nearly drop
-            }
-            else if (ar_sym > ar_start)
-            {
-                score *= std::exp(-ar_k * (ar_sym - ar_start));
-            }
-        }
-
-        // (3) center density penalty (suppress isolated boxes)
-        {
-            float r = density_r_scale * std::min(w, h) + density_bias_px;
-            float r2 = r * r;
-            int nbr = 0;
-
-            for (int j = 0; j < n; j++)
-            {
-                if (j == i) continue;
-                if (boxes[j].score < prob_gate) continue;
-
-                float dx = cx[j] - cx[i];
-                float dy = cy[j] - cy[i];
-                if (dx * dx + dy * dy > r2) continue;
-
-                // light overlap check helps avoid counting unrelated nearby boxes
-                if (box_iou(boxes[i], boxes[j]) < density_iou_thr) continue;
-
-                nbr++;
-                if (nbr >= density_min_nbr) break;
-            }
-
-            if (nbr < density_min_nbr)
-            {
-                // precision-first: hard-ish penalty when isolated
-                // nbr=0 -> *0.35, nbr=1 -> *0.65 (when min_nbr=2)
-                float factor = (nbr == 0) ? 0.35f : 0.65f;
-                score *= factor;
-            }
-        }
-
-        boxes[i].score = score;
-    }
-
-    // --- filter in-place by keep_threshold
-    int widx = 0;
-    for (int i = 0; i < n; i++)
-    {
-        if (boxes[i].score >= keep_threshold)
-        {
-            if (widx != i) boxes[widx] = boxes[i];
-            widx++;
-        }
-    }
-    *count = widx;
-}
-
-// ---------------------------
-// Batch demo main: read all images under a directory (cv::glob), run detection,
-// draw bbox + 5 landmarks, save visuals + write CSV.
-// ---------------------------
 int main(int argc, char** argv)
 {
     // CLI (new + backward compatible):
@@ -1539,7 +1336,8 @@ int main(int argc, char** argv)
     perf << "image_path,preprocess_ms,infer_ms,decode_ms,total_ms,face_count\n";
 
     // Parameters (precision-first)
-    const float draw_threshold = 0.60f; // visualize only boxes >= this after suppression
+    ScoreSuppressionConfig suppression_cfg;
+    suppression_cfg.draw_threshold = 0.60f; // visualize only boxes >= this after suppression
 
     // Keep preprocessing consistent with decoder assumptions (320x320 letterbox).
     ncnn::Mat pad_color(3, 1, 1);
@@ -1575,6 +1373,7 @@ int main(int argc, char** argv)
         auto t_decode0 = std::chrono::steady_clock::now();
         std::vector<face_box> faces;
         detect_retinaface_forward(nimg, det_out, faces, input_w, input_h);
+        apply_detection_score_suppression(faces, img.cols, img.rows, suppression_cfg);
         auto t_decode1 = std::chrono::steady_clock::now();
         auto t1 = std::chrono::steady_clock::now();
 
@@ -1606,7 +1405,7 @@ int main(int argc, char** argv)
             }
             csv << "\n";
 
-            if (f.score < draw_threshold) continue;
+            if (f.score < suppression_cfg.draw_threshold) continue;
 
             cv::rectangle(vis, cv::Rect(cv::Point(x0, y0), cv::Point(x1, y1)), cv::Scalar(0, 255, 0), 2);
             for (int k = 0; k < LANDMARK_NUMBER; k++)

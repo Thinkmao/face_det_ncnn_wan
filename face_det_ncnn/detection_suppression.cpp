@@ -22,6 +22,22 @@ static inline bool point_inside_margin_box(float x, float y, const face_box& box
 static inline float bbox_width(const face_box& b) { return std::max(1.0f, b.x1 - b.x0); }
 static inline float bbox_height(const face_box& b) { return std::max(1.0f, b.y1 - b.y0); }
 
+static inline float box_iou(const face_box& a, const face_box& b)
+{
+    const float inter_x0 = std::max(a.x0, b.x0);
+    const float inter_y0 = std::max(a.y0, b.y0);
+    const float inter_x1 = std::min(a.x1, b.x1);
+    const float inter_y1 = std::min(a.y1, b.y1);
+    const float iw = inter_x1 - inter_x0;
+    const float ih = inter_y1 - inter_y0;
+    if (iw <= 0.f || ih <= 0.f) return 0.f;
+    const float inter = iw * ih;
+    const float area_a = std::max(0.f, a.x1 - a.x0) * std::max(0.f, a.y1 - a.y0);
+    const float area_b = std::max(0.f, b.x1 - b.x0) * std::max(0.f, b.y1 - b.y0);
+    const float uni = area_a + area_b - inter;
+    return uni > 0.f ? (inter / uni) : 0.f;
+}
+
 } // namespace
 
 float compute_landmark_score_multiplier(const face_box& face, int img_w, int img_h,
@@ -126,14 +142,19 @@ float compute_box_score_multiplier(const face_box& face, int img_w, int img_h,
 {
     (void)img_w;
     (void)img_h;
-    float m = 1.f;
-    const float bw = bbox_width(face);
-    const float bh = bbox_height(face);
-    if (std::min(bw, bh) < params.min_face_size) m *= params.size_fail_multiplier;
+    float score = 1.f;
+    const float w = std::max(0.f, face.x1 - face.x0);
+    const float h = std::max(0.f, face.y1 - face.y0);
+    if (w <= 0.f || h <= 0.f) return 0.f;
 
-    const float ar = bw / bh;
-    if (ar < params.min_aspect_ratio || ar > params.max_aspect_ratio) m *= params.aspect_fail_multiplier;
-    return clamp01(m);
+    const float ar = w / h;
+    const float ar_sym = ar >= 1.f ? ar : (1.f / ar);
+    if (ar_sym >= params.ar_hard) {
+        score *= params.ar_hard_multiplier;
+    } else if (ar_sym > params.ar_start) {
+        score *= std::exp(-params.ar_k * (ar_sym - params.ar_start));
+    }
+    return clamp01(score);
 }
 
 void apply_detection_score_suppression(std::vector<face_box>& faces, int img_w, int img_h,
@@ -141,37 +162,81 @@ void apply_detection_score_suppression(std::vector<face_box>& faces, int img_w, 
 {
     if (faces.empty()) return;
 
-    std::vector<float> base_multiplier(faces.size(), 1.f);
+    std::vector<float> multiplier(faces.size(), 1.f);
+    std::vector<float> pre_scores(faces.size(), 0.f);
+    std::vector<float> cx(faces.size(), 0.f), cy(faces.size(), 0.f), ww(faces.size(), 0.f), hh(faces.size(), 0.f);
+
     for (size_t i = 0; i < faces.size(); ++i) {
-        float m = 1.f;
-        m *= compute_landmark_score_multiplier(faces[i], img_w, img_h, config.landmark);
-        m *= compute_box_score_multiplier(faces[i], img_w, img_h, config.box);
-        base_multiplier[i] = clamp01(m);
+        pre_scores[i] = faces[i].score;
+        ww[i] = std::max(0.f, faces[i].x1 - faces[i].x0);
+        hh[i] = std::max(0.f, faces[i].y1 - faces[i].y0);
+        cx[i] = 0.5f * (faces[i].x0 + faces[i].x1);
+        cy[i] = 0.5f * (faces[i].y0 + faces[i].y1);
+
+        multiplier[i] *= compute_landmark_score_multiplier(faces[i], img_w, img_h, config.landmark);
     }
 
-    if (faces.size() > 1) {
-        for (size_t i = 0; i < faces.size(); ++i) {
-            const float cxi = 0.5f * (faces[i].x0 + faces[i].x1);
-            const float cyi = 0.5f * (faces[i].y0 + faces[i].y1);
-            float min_center_dist = 1e12f;
-            for (size_t j = 0; j < faces.size(); ++j) {
-                if (i == j) continue;
-                const float cxj = 0.5f * (faces[j].x0 + faces[j].x1);
-                const float cyj = 0.5f * (faces[j].y0 + faces[j].y1);
-                const float dx = cxi - cxj;
-                const float dy = cyi - cyj;
-                const float d = std::sqrt(dx * dx + dy * dy);
-                min_center_dist = std::min(min_center_dist, d);
-            }
-            const float diag = std::sqrt(bbox_width(faces[i]) * bbox_width(faces[i]) +
-                                         bbox_height(faces[i]) * bbox_height(faces[i]));
-            if (diag > 1e-6f && min_center_dist / diag > config.isolation.isolated_dist_ratio) {
-                base_multiplier[i] *= config.isolation.isolated_fail_multiplier;
+    // Box suppression follows original lab/main.cpp apply_fp_suppression logic:
+    // size prior + aspect prior + neighborhood density prior.
+    float sum_size = 0.f;
+    int cnt = 0;
+    for (size_t i = 0; i < faces.size(); ++i) {
+        if (pre_scores[i] < config.box.prob_gate) continue;
+        if (ww[i] <= 0.f || hh[i] <= 0.f) continue;
+        sum_size += std::sqrt(ww[i] * hh[i]);
+        cnt++;
+    }
+    const float avg_size = (cnt > 0) ? (sum_size / cnt) : 0.f;
+    const float size_thr = avg_size * config.box.size_ratio_thr;
+
+    for (size_t i = 0; i < faces.size(); ++i) {
+        if (pre_scores[i] < config.box.prob_gate) continue;
+
+        float box_m = 1.f;
+        const float w = ww[i], h = hh[i];
+        if (w <= 0.f || h <= 0.f) {
+            multiplier[i] = 0.f;
+            continue;
+        }
+
+        if (size_thr > 0.f) {
+            const float s = std::sqrt(w * h);
+            if (s > 0.f && s < size_thr) {
+                box_m *= clamp01(s / size_thr);
             }
         }
+
+        const float ar = w / h;
+        const float ar_sym = ar >= 1.f ? ar : (1.f / ar);
+        if (ar_sym >= config.box.ar_hard) {
+            box_m *= config.box.ar_hard_multiplier;
+        } else if (ar_sym > config.box.ar_start) {
+            box_m *= std::exp(-config.box.ar_k * (ar_sym - config.box.ar_start));
+        }
+
+        const float r = config.box.density_r_scale * std::min(w, h) + config.box.density_bias_px;
+        const float r2 = r * r;
+        int nbr = 0;
+        for (size_t j = 0; j < faces.size(); ++j) {
+            if (i == j) continue;
+            if (pre_scores[j] < config.box.prob_gate) continue;
+
+            const float dx = cx[j] - cx[i];
+            const float dy = cy[j] - cy[i];
+            if (dx * dx + dy * dy > r2) continue;
+            if (box_iou(faces[i], faces[j]) < config.box.density_iou_thr) continue;
+
+            nbr++;
+            if (nbr >= config.box.density_min_nbr) break;
+        }
+        if (nbr < config.box.density_min_nbr) {
+            box_m *= (nbr == 0) ? config.box.isolated_zero_nbr_multiplier : config.box.isolated_one_nbr_multiplier;
+        }
+
+        multiplier[i] *= clamp01(box_m);
     }
 
     for (size_t i = 0; i < faces.size(); ++i) {
-        faces[i].score = clamp01(faces[i].score * base_multiplier[i]);
+        faces[i].score = clamp01(faces[i].score * multiplier[i]);
     }
 }
