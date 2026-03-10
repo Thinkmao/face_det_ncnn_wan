@@ -1,5 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include "net.h"
+#include "face_types.h"
+#include "detection_suppression.h"
 #include <vector>
 #include <map>
 #include <cmath>
@@ -25,18 +27,6 @@
 #endif
 
 using namespace std;
-
-// Face box + 5 landmarks (RetinaFace-style)
-#define LANDMARK_NUMBER 5
-struct face_landmark {
-	float x[LANDMARK_NUMBER];
-	float y[LANDMARK_NUMBER];
-};
-struct face_box {
-	float x0, y0, x1, y1;
-	float score;
-	face_landmark landmark;
-};
 
 static void qsort_descent_inplace(face_box* faceobjects, int left, int right) {
 	int i = left, j = right;
@@ -1261,6 +1251,10 @@ int main(int argc, char** argv) {
     pad_color[1] = 117.f; // G
     pad_color[2] = 123.f; // R
 
+    // 可调的抑制策略参数：landmarks异常、框大小/形状、孤立框。
+    ScoreSuppressionConfig suppression_cfg;
+    suppression_cfg.draw_threshold = 0.6f;
+
     int processed = 0;
     for (size_t i = 0; i < image_paths.size(); ++i) {
         const std::string& img_path = image_paths[i];
@@ -1286,48 +1280,55 @@ int main(int argc, char** argv) {
         std::vector<face_box> faces;
         detect_retinaface_forward(nimg, det_out, faces);
 
+        // 对异常框做“置信抑制”而不是直接否定。
+        apply_detection_score_suppression(faces, img_bgr.cols, img_bgr.rows, suppression_cfg);
+
         // Draw results on a copy.
         cv::Mat vis = img_bgr.clone();
 
-        if (faces.empty()) {
-            // Still write a row for the image (face_index = -1).
+        bool any_row_written = false;
+        for (size_t j = 0; j < faces.size(); ++j) {
+            const face_box& fb = faces[j];
+
+            // Clamp & round for drawing / csv.
+            int x0 = (int)std::round(std::max(0.f, fb.x0));
+            int y0 = (int)std::round(std::max(0.f, fb.y0));
+            int x1 = (int)std::round(std::min((float)vis.cols - 1, fb.x1));
+            int y1 = (int)std::round(std::min((float)vis.rows - 1, fb.y1));
+
+            // 始终记录CSV（包含被抑制后的score），方便后续调参。
+            csv << img_path << "," << j << "," << fb.score << ","
+                << x0 << "," << y0 << "," << x1 << "," << y1 << ",";
+            for (int k = 0; k < LANDMARK_NUMBER; ++k) {
+                csv << fb.landmark.x[k] << "," << fb.landmark.y[k];
+                if (k != LANDMARK_NUMBER - 1) csv << ",";
+            }
+            csv << "\n";
+            any_row_written = true;
+
+            // 仅当score >= draw_threshold时画框，利用阈值约束误检。
+            if (fb.score < suppression_cfg.draw_threshold) {
+                continue;
+            }
+
+            cv::rectangle(vis, cv::Rect(cv::Point(x0, y0), cv::Point(x1, y1)),
+                          cv::Scalar(255, 0, 0), 2);
+
+            for (int k = 0; k < LANDMARK_NUMBER; ++k) {
+                int lx = (int)std::round(fb.landmark.x[k]);
+                int ly = (int)std::round(fb.landmark.y[k]);
+                cv::circle(vis, cv::Point(lx, ly), 2, cv::Scalar(0, 255, 0), -1);
+            }
+
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "s=%.3f", fb.score);
+            cv::putText(vis, buf, cv::Point(x0, std::max(0, y0 - 5)),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 1);
+        }
+
+        if (!any_row_written) {
             csv << img_path << ",-1,0,0,0,0,0,"
                 << "0,0,0,0,0,0,0,0,0,0\n";
-        } else {
-            for (size_t j = 0; j < faces.size(); ++j) {
-                const face_box& fb = faces[j];
-
-                // Clamp & round for drawing.
-                int x0 = (int)std::round(std::max(0.f, fb.x0));
-                int y0 = (int)std::round(std::max(0.f, fb.y0));
-                int x1 = (int)std::round(std::min((float)vis.cols - 1, fb.x1));
-                int y1 = (int)std::round(std::min((float)vis.rows - 1, fb.y1));
-
-                cv::rectangle(vis, cv::Rect(cv::Point(x0, y0), cv::Point(x1, y1)),
-                              cv::Scalar(255, 0, 0), 2);
-
-                // Draw 5 landmarks.
-                for (int k = 0; k < LANDMARK_NUMBER; ++k) {
-                    int lx = (int)std::round(fb.landmark.x[k]);
-                    int ly = (int)std::round(fb.landmark.y[k]);
-                    cv::circle(vis, cv::Point(lx, ly), 2, cv::Scalar(0, 255, 0), -1);
-                }
-
-                // Optional: put score text.
-                char buf[64];
-                std::snprintf(buf, sizeof(buf), "s=%.3f", fb.score);
-                cv::putText(vis, buf, cv::Point(x0, std::max(0, y0 - 5)),
-                            cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 1);
-
-                // Write CSV row.
-                csv << img_path << "," << j << "," << fb.score << ","
-                    << x0 << "," << y0 << "," << x1 << "," << y1 << ",";
-                for (int k = 0; k < LANDMARK_NUMBER; ++k) {
-                    csv << fb.landmark.x[k] << "," << fb.landmark.y[k];
-                    if (k != LANDMARK_NUMBER - 1) csv << ",";
-                }
-                csv << "\n";
-            }
         }
 
         // Save visualization image. Keep original basename; add a prefix to avoid collision.
@@ -1344,4 +1345,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
