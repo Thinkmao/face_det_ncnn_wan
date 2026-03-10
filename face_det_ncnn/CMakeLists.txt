@@ -22,7 +22,10 @@ set(ncnn_DIR "/home/datas/workspace/xiezheng/wanxiaozhi/ncnn/ncnn-20250916/build
 find_package(ncnn REQUIRED)
 
 # 添加可执行文件
-add_executable(face_det_ncnn main.cpp)
+add_executable(face_det_ncnn
+    main.cpp
+    detection_suppression.cpp
+)
 
 # 链接数学库 (需要用于sqrt函数)
 target_link_libraries(face_det_ncnn m ${OpenCV_LIBS} ncnn)
