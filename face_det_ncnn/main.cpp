@@ -1,5 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include "net.h"
+#include "face_types.h"
+#include "detection_suppression.h"
 #include <vector>
 #include <map>
 #include <cmath>
@@ -25,18 +27,6 @@
 #endif
 
 using namespace std;
-
-// Face box + 5 landmarks (RetinaFace-style)
-#define LANDMARK_NUMBER 5
-struct face_landmark {
-	float x[LANDMARK_NUMBER];
-	float y[LANDMARK_NUMBER];
-};
-struct face_box {
-	float x0, y0, x1, y1;
-	float score;
-	face_landmark landmark;
-};
 
 static void qsort_descent_inplace(face_box* faceobjects, int left, int right) {
 	int i = left, j = right;
@@ -80,108 +70,6 @@ static int nms_sorted_bboxes(face_box* faceobjects, const int faceCount, int* pi
 		if (keep) picked[n++] = i;
 	}
 	return n;
-}
-
-static bool is_point_inside_margin_box(float x, float y, const face_box& box, float margin_ratio)
-{
-	const float bw = std::max(1.0f, box.x1 - box.x0);
-	const float bh = std::max(1.0f, box.y1 - box.y0);
-	const float mx = bw * margin_ratio;
-	const float my = bh * margin_ratio;
-	return x >= (box.x0 - mx) && x <= (box.x1 + mx) && y >= (box.y0 - my) && y <= (box.y1 + my);
-}
-
-// Landmark based suppression.
-// Keep constraints loose enough for profile faces while rejecting obvious geometric outliers.
-static bool is_landmark_layout_reasonable(const face_box& face, int img_w, int img_h)
-{
-	const float bw = std::max(1.0f, face.x1 - face.x0);
-	const float bh = std::max(1.0f, face.y1 - face.y0);
-	if (bw < 4.f || bh < 4.f) return false;
-
-	int inside_cnt = 0;
-	for (int i = 0; i < LANDMARK_NUMBER; ++i) {
-		if (is_point_inside_margin_box(face.landmark.x[i], face.landmark.y[i], face, 0.2f)) {
-			inside_cnt++;
-		}
-	}
-	// For profile faces, allow one landmark to drift out.
-	if (inside_cnt < 4) return false;
-
-	const float eye_dx = face.landmark.x[1] - face.landmark.x[0];
-	const float eye_dy = face.landmark.y[1] - face.landmark.y[0];
-	const float eye_dist = std::sqrt(eye_dx * eye_dx + eye_dy * eye_dy);
-	const float mouth_dx = face.landmark.x[4] - face.landmark.x[3];
-	const float mouth_dy = face.landmark.y[4] - face.landmark.y[3];
-	const float mouth_dist = std::sqrt(mouth_dx * mouth_dx + mouth_dy * mouth_dy);
-
-	const float nose_x = face.landmark.x[2];
-	const float eye_min_x = std::min(face.landmark.x[0], face.landmark.x[1]);
-	const float eye_max_x = std::max(face.landmark.x[0], face.landmark.x[1]);
-	const float mouth_min_x = std::min(face.landmark.x[3], face.landmark.x[4]);
-	const float mouth_max_x = std::max(face.landmark.x[3], face.landmark.x[4]);
-	const bool nose_on_same_side_of_eyes_and_mouth =
-		(nose_x < eye_min_x && nose_x < mouth_min_x) ||
-		(nose_x > eye_max_x && nose_x > mouth_max_x);
-
-	// 双眼/嘴角距离相对框宽比例约束：侧脸时鼻子可能在眼/嘴同侧，允许放宽下限。
-	if (!nose_on_same_side_of_eyes_and_mouth && eye_dist / bw < 0.02f) return false;
-	if (!nose_on_same_side_of_eyes_and_mouth && mouth_dist / bw < 0.02f) return false;
-	if (eye_dist / bw > 0.95f) return false;
-	if (mouth_dist / bw > 0.95f) return false;
-
-	const float eye_cy = 0.5f * (face.landmark.y[0] + face.landmark.y[1]);
-	const float mouth_cy = 0.5f * (face.landmark.y[3] + face.landmark.y[4]);
-	const float nose_y = face.landmark.y[2];
-	const float y_slack = 0.35f * bh;
-
-	// 眼嘴的纵向距离相对框高比例约束。
-	const float eye_mouth_dy_ratio = std::fabs(mouth_cy - eye_cy) / bh;
-	if (eye_mouth_dy_ratio < 0.08f || eye_mouth_dy_ratio > 1.05f) return false;
-
-	// 鼻距离眼/嘴相对框大小比例约束（取到眼中心/嘴中心距离）。
-	const float nose_eye_dist = std::sqrt((nose_x - 0.5f * (face.landmark.x[0] + face.landmark.x[1])) *
-		(nose_x - 0.5f * (face.landmark.x[0] + face.landmark.x[1])) +
-		(nose_y - eye_cy) * (nose_y - eye_cy));
-	const float nose_mouth_dist = std::sqrt((nose_x - 0.5f * (face.landmark.x[3] + face.landmark.x[4])) *
-		(nose_x - 0.5f * (face.landmark.x[3] + face.landmark.x[4])) +
-		(nose_y - mouth_cy) * (nose_y - mouth_cy));
-	const float box_diag = std::sqrt(bw * bw + bh * bh);
-	if (nose_eye_dist / box_diag < 0.02f || nose_eye_dist / box_diag > 0.85f) return false;
-	if (nose_mouth_dist / box_diag < 0.02f || nose_mouth_dist / box_diag > 0.85f) return false;
-
-	// Typical order: eyes -> nose -> mouth. Keep large tolerance for pose and roll.
-	if (mouth_cy < eye_cy - y_slack) return false;
-	if (nose_y < eye_cy - y_slack || nose_y > mouth_cy + y_slack) return false;
-
-	float min_lx = face.landmark.x[0], max_lx = face.landmark.x[0];
-	float min_ly = face.landmark.y[0], max_ly = face.landmark.y[0];
-	for (int i = 1; i < LANDMARK_NUMBER; ++i) {
-		min_lx = std::min(min_lx, face.landmark.x[i]);
-		max_lx = std::max(max_lx, face.landmark.x[i]);
-		min_ly = std::min(min_ly, face.landmark.y[i]);
-		max_ly = std::max(max_ly, face.landmark.y[i]);
-	}
-
-	const float lmk_span_y = max_ly - min_ly;
-	if (lmk_span_y / bh < 0.08f || lmk_span_y / bh > 1.1f) return false;
-
-	// "landmarks质心与边框比例约束":
-	// 将5个landmark的质心映射到bbox局部坐标系，检查它落在一个宽松的比例区间内。
-	// 这样可以过滤掉关键点整体漂移到框外的异常情况，同时保留侧脸（允许一定越界）。
-	const float cx = 0.2f * (face.landmark.x[0] + face.landmark.x[1] + face.landmark.x[2] + face.landmark.x[3] + face.landmark.x[4]);
-	const float cy = 0.2f * (face.landmark.y[0] + face.landmark.y[1] + face.landmark.y[2] + face.landmark.y[3] + face.landmark.y[4]);
-	const float cx_ratio = (cx - face.x0) / bw;
-	const float cy_ratio = (cy - face.y0) / bh;
-	if (cx_ratio < -0.35f || cx_ratio > 1.35f || cy_ratio < -0.35f || cy_ratio > 1.35f) return false;
-
-	// Extra safety: if the entire box is far outside image bounds, suppress.
-	if (face.x1 < -0.3f * bw || face.y1 < -0.3f * bh ||
-		face.x0 > img_w + 0.3f * bw || face.y0 > img_h + 0.3f * bh) {
-		return false;
-	}
-
-	return true;
 }
 
 static int generate_anchors(int step, const int* min_sizes,
@@ -486,9 +374,7 @@ static int detect_retinaface_forward(const ncnn::Mat& bgr, ncnn::Mat& output, st
 			detectResult[i].landmark.y[landmark_idx] = (detectResult[i].landmark.y[landmark_idx] - top) / scale;
 		}
 
-		if (is_landmark_layout_reasonable(detectResult[i], img_w, img_h)) {
-			out_p_faces.push_back(detectResult[i]);
-		}
+		out_p_faces.push_back(detectResult[i]);
 	}
 
 	if (box_list_32)
@@ -1365,6 +1251,10 @@ int main(int argc, char** argv) {
     pad_color[1] = 117.f; // G
     pad_color[2] = 123.f; // R
 
+    // 可调的抑制策略参数：landmarks异常、框大小/形状、孤立框。
+    ScoreSuppressionConfig suppression_cfg;
+    suppression_cfg.draw_threshold = 0.6f;
+
     int processed = 0;
     for (size_t i = 0; i < image_paths.size(); ++i) {
         const std::string& img_path = image_paths[i];
@@ -1390,48 +1280,55 @@ int main(int argc, char** argv) {
         std::vector<face_box> faces;
         detect_retinaface_forward(nimg, det_out, faces);
 
+        // 对异常框做“置信抑制”而不是直接否定。
+        apply_detection_score_suppression(faces, img_bgr.cols, img_bgr.rows, suppression_cfg);
+
         // Draw results on a copy.
         cv::Mat vis = img_bgr.clone();
 
-        if (faces.empty()) {
-            // Still write a row for the image (face_index = -1).
+        bool any_row_written = false;
+        for (size_t j = 0; j < faces.size(); ++j) {
+            const face_box& fb = faces[j];
+
+            // Clamp & round for drawing / csv.
+            int x0 = (int)std::round(std::max(0.f, fb.x0));
+            int y0 = (int)std::round(std::max(0.f, fb.y0));
+            int x1 = (int)std::round(std::min((float)vis.cols - 1, fb.x1));
+            int y1 = (int)std::round(std::min((float)vis.rows - 1, fb.y1));
+
+            // 始终记录CSV（包含被抑制后的score），方便后续调参。
+            csv << img_path << "," << j << "," << fb.score << ","
+                << x0 << "," << y0 << "," << x1 << "," << y1 << ",";
+            for (int k = 0; k < LANDMARK_NUMBER; ++k) {
+                csv << fb.landmark.x[k] << "," << fb.landmark.y[k];
+                if (k != LANDMARK_NUMBER - 1) csv << ",";
+            }
+            csv << "\n";
+            any_row_written = true;
+
+            // 仅当score >= draw_threshold时画框，利用阈值约束误检。
+            if (fb.score < suppression_cfg.draw_threshold) {
+                continue;
+            }
+
+            cv::rectangle(vis, cv::Rect(cv::Point(x0, y0), cv::Point(x1, y1)),
+                          cv::Scalar(255, 0, 0), 2);
+
+            for (int k = 0; k < LANDMARK_NUMBER; ++k) {
+                int lx = (int)std::round(fb.landmark.x[k]);
+                int ly = (int)std::round(fb.landmark.y[k]);
+                cv::circle(vis, cv::Point(lx, ly), 2, cv::Scalar(0, 255, 0), -1);
+            }
+
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "s=%.3f", fb.score);
+            cv::putText(vis, buf, cv::Point(x0, std::max(0, y0 - 5)),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 1);
+        }
+
+        if (!any_row_written) {
             csv << img_path << ",-1,0,0,0,0,0,"
                 << "0,0,0,0,0,0,0,0,0,0\n";
-        } else {
-            for (size_t j = 0; j < faces.size(); ++j) {
-                const face_box& fb = faces[j];
-
-                // Clamp & round for drawing.
-                int x0 = (int)std::round(std::max(0.f, fb.x0));
-                int y0 = (int)std::round(std::max(0.f, fb.y0));
-                int x1 = (int)std::round(std::min((float)vis.cols - 1, fb.x1));
-                int y1 = (int)std::round(std::min((float)vis.rows - 1, fb.y1));
-
-                cv::rectangle(vis, cv::Rect(cv::Point(x0, y0), cv::Point(x1, y1)),
-                              cv::Scalar(255, 0, 0), 2);
-
-                // Draw 5 landmarks.
-                for (int k = 0; k < LANDMARK_NUMBER; ++k) {
-                    int lx = (int)std::round(fb.landmark.x[k]);
-                    int ly = (int)std::round(fb.landmark.y[k]);
-                    cv::circle(vis, cv::Point(lx, ly), 2, cv::Scalar(0, 255, 0), -1);
-                }
-
-                // Optional: put score text.
-                char buf[64];
-                std::snprintf(buf, sizeof(buf), "s=%.3f", fb.score);
-                cv::putText(vis, buf, cv::Point(x0, std::max(0, y0 - 5)),
-                            cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 1);
-
-                // Write CSV row.
-                csv << img_path << "," << j << "," << fb.score << ","
-                    << x0 << "," << y0 << "," << x1 << "," << y1 << ",";
-                for (int k = 0; k < LANDMARK_NUMBER; ++k) {
-                    csv << fb.landmark.x[k] << "," << fb.landmark.y[k];
-                    if (k != LANDMARK_NUMBER - 1) csv << ",";
-                }
-                csv << "\n";
-            }
         }
 
         // Save visualization image. Keep original basename; add a prefix to avoid collision.
